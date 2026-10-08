@@ -69,33 +69,6 @@ press **End session**, or whenever the tab closes or reloads.
 | **Switch Port Inventory** | `mist_switch_port_inventory.py` | Site · Org | Mist token + org |
 | **SSR Pre/Post Check** | `pre-post-check-gui.py` | SSR Conductor | Conductor URL + username/password |
 
-Every **Site · Org** tool has an *All sites in the org* checkbox (ticked by default) and a
-*Site* picker; untick the box to report on one site. The level is shown on each tool's card.
-Switch Config Export downloads one `.txt` for a single switch, or one `.zip` with a folder per
-site plus `index.csv` when there are several.
-
-`parse_bgp_homing.py` was deliberately left out.
-
-Screenshots of every tool, taken against synthetic data, are in
-[`docs/screenshots/`](docs/screenshots/README.md). Regenerate them with
-`node --experimental-websocket scripts/screenshots/capture.mjs`, which loads the extension
-into headless Chromium and answers every API call from `scripts/screenshots/fixtures.mjs`.
-
-### Differences from the Python worth knowing
-
-- **Region.** `mist_ssid_report.py` and `site-wifi-clients.py` hardcoded
-  `api.gc2.mist.com`. All tools now take the region from the picker, which covers
-  all 13 Mist clouds including `api.us.mist-federal.com`.
-- **Org choice.** `site-wifi-clients.py` silently used the first org the token
-  could see. You now choose.
-- **File names.** `site-wifi-clients.py` always wrote
-  `all_sites_wifi_clients.xlsx`, overwriting the previous run. Every export is
-  now timestamped.
-- **Pagination.** The Wi-Fi client export used to stop at the first short page,
-  which under-reports a busy site. It now honours `X-Page-Total` like
-  `mist_switch_port_inventory.py` did.
-- **PII.** The Wi-Fi client export contains usernames, hostnames, MAC and IP
-  addresses and guest names/emails/companies. The tool says so before you run it.
 
 ### SSR Pre/Post Check
 
@@ -103,22 +76,6 @@ Snapshot the nine checks across the routers you select, make your change, then
 run the post-check to diff every value that moved — with character-level
 highlighting on click, and CSV export matching the Python's columns exactly
 (Router, Check, Path, Pre Value, Post Value, Change).
-
-Three things the desktop script could do that a browser extension cannot:
-
-- **Skip certificate verification.** The Python defaulted to `verify=False` and
-  could load a CA bundle. `fetch()` offers neither. If your Conductor uses a
-  self-signed or internal-CA certificate, open `https://<conductor>` in a tab
-  once and accept the certificate; the tool shows this prompt with a direct link
-  when a connection fails. Note that an unreachable host and a rejected
-  certificate are indistinguishable to a web page, so the message covers both.
-- **Keep snapshots in a working directory.** Pre-check data is held in memory for
-  a same-session pre -> post run. For a change window that outlives the tab, use
-  **Download pre-check snapshot** and **Load pre-check snapshot**. (Deliberately
-  not browser storage — see the policy below.)
-- **Scrub the password from memory.** `_secure_erase`'s `ctypes.memset` has no JS
-  equivalent; strings are immutable. The field is cleared once the password is
-  exchanged for a bearer token, and that is all that can be promised.
 
 The Conductor host is not in `host_permissions`. The first time you connect, the
 browser asks permission for that one origin.
@@ -151,70 +108,7 @@ assistant, add your script at the end, and install the file it returns.
 `tests/docs.test.js` keeps the guide's `ctx` table and the prompt's example in
 step with the code.
 
-**By hand:**
 
-```bash
-cp my-report.js tools/     # drop it in
-npm run scan               # regenerates tools/tools.json
-npm test                   # the registry test checks it loads and is valid
-```
-
-then press reload on the extension's card. A tool that fails to load shows as
-a card explaining why, and does not take the menu down with it.
-
-## Security posture
-
-Enforced mechanically by `tests/policy.test.js`, not just by convention:
-
-- **No credential is ever persisted.** No `chrome.storage`, `localStorage`,
-  `sessionStorage`, IndexedDB or cookie access appears anywhere in shipped code.
-- **No credential crosses to the service worker.** No `chrome.runtime.sendMessage`
-  or `connect`.
-- **No `console.*`** in shipped code, so nothing can leak to devtools.
-- **One `fetch` in `mist.js`**, carrying the host allowlist check, the HTTPS
-  check and `credentials: "omit"` so no cookie rides along.
-- **No `permissions` array.** Downloads use a Blob anchor, which needs none.
-- **`host_permissions` equals `MIST_HOSTS` exactly, in order** — 13 Mist regions,
-  nothing else. The SSR Conductor comes from `optional_host_permissions` and is
-  granted at runtime, per origin, only when you connect.
-- **Mist requests are GET only.** POST is confined to `tools/ssr-pre-post.js`,
-  where it is the login exchange and one Conductor stats endpoint that only
-  answers to POST. Nothing in this extension writes configuration anywhere.
-- **The credential bar is not a `<form>`**, so no password manager offers to save
-  an API token.
-- All API-sourced text is escaped before it reaches the DOM.
-
-## Tests
-
-```bash
-npm test      # node --test tests/ — no dependencies
-```
-
-143 tests, including:
-
-- `parity.test.js` — the disconnect console's original 190 assertions, unchanged,
-  against the copied `engine/`
-- `subnet.test.js` — a fixture generated by Python's own `ipaddress` module, so
-  the IPv4/IPv6 math is provably identical (IPv6 held as `BigInt`, because an
-  overlap sweep comparing `/64` network addresses overflows a `Number`)
-- `paginate.test.js` — both Mist pagination regimes, including that a short page
-  does **not** end a walk and that a cursor is never followed to another host
-- `port-inventory.test.js` — the virtual-chassis attribution, port-range
-  expansion with zero padding, and the four-source merge
-- `ssr-pre-post.test.js` — `SequenceMatcher` opcodes checked against Python's
-  `difflib` with `autojunk=False`
-- `policy.test.js` — every rule in the section above
-- `imports.test.js` — static check that the module graph and element ids line up,
-  since the shell cannot be imported in Node
-
-## Verifying against the Python
-
-The real check is output parity: run a Python script and its ported tool against
-the same org with the same token and compare row counts and spot-check columns.
-
-That cannot be done on this server — there is no `pip`, and `openpyxl`, `pandas`
-and `xlsxwriter` are all absent (only `python3-requests` is installed). Do it on
-a machine that already runs these scripts.
 
 ## Layout
 
