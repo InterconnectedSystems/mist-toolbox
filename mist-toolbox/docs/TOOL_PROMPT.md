@@ -17,6 +17,7 @@ export default {
   description: "One or two sentences (more than 30 characters) saying what the report contains.",
   tag: "Mist API",
   needs: { mistToken: true, org: true },   // token + selected org are supplied by the toolbox
+  scope: "site",                            // adds "All sites in the org" + a Site picker
   params: [ /* form fields */ ],
   async run(ctx) { /* ... */ return { summary, filename, sheets, preview }; },
 };
@@ -27,6 +28,14 @@ export default {
 Values arrive as `ctx.params.<id>` (number → number or null, checkbox → boolean,
 file → File or null). A `select` with `optionsFrom: "sites"` lists the org's sites
 (value = site id).
+
+**Site / org scope.** Any report that covers sites must declare `scope: "site"`. The toolbox
+then draws an "All sites in the org" checkbox and a Site picker (never declare `allSites` /
+`siteId` params yourself), and `await ctx.targetSites()` returns
+`{ sites, orgSites, all, label, fileLabel }`. `sites` holds the full site records to report
+on (one, or all), `orgSites` every site for name lookups, and `fileLabel` goes into
+`ctx.stampedName(prefix, scope.fileLabel, "xlsx")`. Loop over `sites` instead of fetching
+`/orgs/{id}/sites`; filter org-wide calls (e.g. inventory) to those sites by `site_id`.
 
 ## The `ctx` object `run()` receives
 
@@ -60,6 +69,7 @@ Throw an `Error` to fail with a message.
 ## Conversion guidance
 
 - Keep the original's API calls, row fields, column headers, column order, sorting and filename prefix.
+- If the original loops over an org's sites (or takes a site as an argument), make it `scope: "site"` and use `ctx.targetSites()`.
 - Terminal prompts and command-line flags become `params`. Hardcoded org/region choices go away (the toolbox supplies them).
 - Replace hand-written pagination with `ctx.getAll` (Mist can return fewer rows than `limit` before the end; `getAll` handles it).
 - Sequential per-site loops become `ctx.pool(ctx.POOL_LIMIT, ...)`, with a `try/catch` per site so one failure is logged and reported in `summary` rather than fatal. Call `ctx.progress` as sites finish.
@@ -77,17 +87,20 @@ first-line comment, e.g. `// mist-switch-report.js — converted from mist_switc
 ```js
 // A complete, working Mist Toolbox tool to copy from.
 //
-// It counts the devices at every site from one org inventory call. Rename the
+// It counts the devices at one site, or at every site, from one org inventory
+// call. `scope: "site"` gives it the site picker and the "All sites in the
+// org" box; ctx.targetSites() says which sites were chosen. Rename the
 // file (e.g. my-report.js), change id / name / description, replace run(), and
 // install it with the toolbox's "Manage tools" button.
 
 export default {
   id: "device-count",
   name: "Device Count by Site",
-  description: "How many access points, switches and gateways each site has, "
-    + "from the org inventory, with a total row.",
+  description: "How many access points, switches and gateways one site, or every site "
+    + "in the org, has — from the org inventory, with a total row.",
   tag: "Mist API",
   needs: { mistToken: true, org: true },
+  scope: "site",
   params: [
     {
       id: "connectedOnly",
@@ -101,10 +114,15 @@ export default {
     const { getAll, log } = ctx;
     log(`Org: ${ctx.orgName}`, "info");
 
-    const sites = await getAll(`/orgs/${ctx.orgId}/sites`);
-    const siteName = Object.fromEntries(sites.map((s) => [s.id, s.name || s.id]));
+    const scope = await ctx.targetSites();
+    const siteName = Object.fromEntries(scope.orgSites.map((s) => [s.id, s.name || s.id]));
+    const wanted = new Set(scope.sites.map((s) => s.id));
+    log(`Scope: ${scope.label}`, "info");
 
-    const inventory = await getAll(`/orgs/${ctx.orgId}/inventory`);
+    // The inventory call is org-wide; keep the chosen sites (and, for the
+    // whole org, devices not yet assigned to any site).
+    const inventory = (await getAll(`/orgs/${ctx.orgId}/inventory`))
+      .filter((d) => wanted.has(d.site_id) || (scope.all && !d.site_id));
     const counted = ctx.params.connectedOnly ? inventory.filter((d) => d.connected) : inventory;
     log(`${counted.length} device(s) counted of ${inventory.length} in inventory.`, "info");
 
@@ -134,7 +152,7 @@ export default {
     log("Done.", "ok");
     return {
       summary: `${counted.length} device(s) across ${rows.length - 1} site(s)`,
-      filename: ctx.stampedName("mist_device_count", ctx.orgName, "xlsx"),
+      filename: ctx.stampedName("mist_device_count", scope.fileLabel, "xlsx"),
       sheets: [ctx.xlsx.sheet("Devices by Site", columns, rows)],
       preview: { title: "Devices by Site", columns, rows },
     };

@@ -50,6 +50,7 @@ export default {
   tag: "Mist API",                    // optional small label on the card
   notice: "Contains PII …",           // optional banner shown above the form
   needs: { mistToken: true, org: true },
+  scope: "site",                      // site picker + "All sites in the org" (see below)
   params: [ /* form fields, below */ ],
   async run(ctx) { /* … */ return { /* result, below */ }; },
 };
@@ -58,6 +59,29 @@ export default {
 `needs.mistToken: true` means the card stays locked until a token is
 validated. `needs.org: true` means an organization must be selected, and
 `ctx.orgId` / `ctx.orgName` are set.
+
+### `scope: "site"`: one site or the whole org
+
+Any report that works across sites should declare `scope: "site"`. The toolbox
+then:
+
+- adds two fields above your own: **All sites in the org** (ticked by default)
+  and a **Site** picker, which is greyed out while the box is ticked. Don't
+  declare `allSites` or `siteId` params yourself; a scoped tool that does is
+  refused.
+- labels the menu card **Site · Org**. Org-only tools show **Org**.
+- gives you `await ctx.targetSites()`, which returns:
+
+| Field | What it is |
+|---|---|
+| `sites` | The sites to report on: every site, or just the chosen one. Full Mist site records, sorted by name |
+| `orgSites` | Every site in the org, for looking up names by `site_id` |
+| `all` | `true` when "All sites in the org" is ticked |
+| `label` | `"all 42 sites"` or the site's name, for log lines and summaries |
+| `fileLabel` | `"<org>"` or `"<org>_<site>"`. Use it in `ctx.stampedName(prefix, scope.fileLabel, ext)` |
+
+Loop over `sites` instead of fetching `/orgs/{id}/sites` yourself. If you need an
+org-wide call (inventory, say), filter its rows to `sites` by `site_id`.
 
 ### `params`: the form
 
@@ -95,7 +119,8 @@ Other keys: `label`, `default`, `hint` (small text under the field),
 | `ctx.mistGetFull` | Same, but returns `{data, headers}` |
 | `ctx.getAll` | `await ctx.getAll(path, params?)` follows every page and returns one array. Handles both Mist pagination styles. **Use this for lists.** |
 | `ctx.searchAll` | Same for `/search` endpoints (follows the `next` cursor) |
-| `ctx.listSites` | `await ctx.listSites()` returns the org's sites |
+| `ctx.listSites` | `await ctx.listSites()` returns every site in the org as `{id, name}`, sorted |
+| `ctx.targetSites` | For `scope: "site"` tools: `await ctx.targetSites()` returns the sites the user chose (see above) |
 | `ctx.pool` | `await ctx.pool(limit, [() => promise, …])` runs jobs in parallel, results in input order |
 | `ctx.POOL_LIMIT` | Polite parallelism for Mist (6) |
 | `ctx.xlsx` | `{ sheet, workbook, STYLE, colLetter }`. Usually you only need `sheet` |

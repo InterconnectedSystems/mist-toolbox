@@ -287,13 +287,14 @@ test("the Summary sheet counts what the Python counted", async () => {
   assert.equal(get("Unique networks"), 5);
 });
 
-test("saveConfigs produces one downloadable .txt per switch", async () => {
-  stubMist(routes());
-  const off = await tool.run(testCtx());
-  assert.deepEqual(off.files, []);
-
-  const on = await tool.run(testCtx({ params: { saveConfigs: true } }));
-  assert.equal(on.files.length, 2);
-  assert.ok(on.files.every((f) => /\.txt$/.test(f.name)));
-  assert.ok(on.files.some((f) => f.name === "HQ__hq-sw1__aabbcc000001.txt"));
+test("a single site reports only that site's switches, and the raw-config option is gone", async () => {
+  const calls = stubMist(routes());
+  const result = await tool.run(testCtx({ params: { allSites: false, siteId: "s2" } }));
+  assert.ok(!tool.params.some((p) => p.id === "saveConfigs"), "config export moved to its own tool");
+  assert.equal(result.files, undefined);
+  const switches = sheetNamed(result, "Switches").rows;
+  assert.deepEqual(switches.map((r) => r.Switch), ["br-sw1"], "HQ and the unassigned spare are out of scope");
+  assert.deepEqual(sheetNamed(result, "Sites").rows.map((r) => r.Site), ["Branch"]);
+  assert.ok(!calls.some((c) => c.startsWith("/sites/s1/")), "no HQ config is fetched");
+  assert.match(result.filename, /^mist_irb_Acme_Corp_Branch_/);
 });

@@ -396,3 +396,20 @@ test("the Summary sheet counts ports by state", async () => {
   assert.equal(get("Ports down"), 1);
   assert.equal(get("Configured port entries"), 2, "ge-0/0/0-1 expanded to two");
 });
+
+test("one site: skips the org-wide port and stats calls and stays on that site", async () => {
+  const calls = stubMist(routes({
+    "/orgs/org-1/sites": [...SITES, { id: "s2", name: "Branch" }],
+    "/sites/s1/stats/ports/search": {
+      results: [{ mac: "aabbcc000001", port_id: "ge-0/0/0", up: true, speed: 1000 }],
+      total: 1,
+    },
+  }));
+  const result = await tool.run(testCtx({ params: { allSites: false, siteId: "s1" } }));
+  assert.ok(!calls.some((c) => c.startsWith("/orgs/org-1/stats/")), "no org-wide port or device stats");
+  assert.ok(calls.some((c) => c.startsWith("/sites/s1/stats/ports/search")), "per-site port search used");
+  assert.ok(!calls.some((c) => c.startsWith("/sites/s2/")), "the other site is never touched");
+  assert.ok(sheetNamed(result, "Switch Ports").rows.some((r) => r.Port === "ge-0/0/0"));
+  assert.deepEqual(sheetNamed(result, "Sites").rows.map((r) => r.Site), ["HQ"]);
+  assert.match(result.filename, /^mist_switch_ports_Acme_Corp_HQ_/);
+});

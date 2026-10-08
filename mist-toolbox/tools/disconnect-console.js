@@ -19,6 +19,7 @@ export default {
   description: "Root-cause a Wi-Fi client's disconnects: RF and SNR, 802.11 reason codes, DHCP "
     + "after roam, RRM channel occupancy, 7-day DFS radar, and Teams/Zoom call quality.",
   tag: "opens in its own tab",
+  level: "Site · Client",
   // It collects its own credentials, so the menu never greys it out.
   needs: { mistToken: false },
 

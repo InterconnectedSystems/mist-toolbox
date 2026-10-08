@@ -168,6 +168,7 @@ export default {
     + "across an SSR Conductor's routers before a change, then again after, and diff every "
     + "value that moved.",
   tag: "SSR Conductor · not Mist",
+  level: "SSR Conductor",
   needs: { mistToken: false },
 
   async mount(ctx) {
@@ -596,6 +597,7 @@ export default {
 
     // ---- Terminal-style output -------------------------------------------
     const cleanCli = (v) => toCliText(String(v ?? ""));
+    const lineText = (segs) => (segs || []).map(([t]) => t).join("");
     const segHtml = (segs, cls) => (segs || []).map(([t, hot]) => (hot
       ? `<mark class="${cls}">${esc(t)}</mark>` : esc(t))).join("");
 
@@ -603,9 +605,10 @@ export default {
     function postView(rows) {
       return `<div class="term"><div class="term-in">${rows.map((r) => {
         if (r.kind === "removed") {
-          return `<div class="ln ln-del" title="Only in the pre-check">${segHtml([[r.pre.map(([t]) => t).join(""), false]])}</div>`;
+          return `<div class="ln ln-del" title="Only in the pre-check">${esc(lineText(r.pre))}</div>`;
         }
-        if (r.kind === "added") return `<div class="ln ln-add" title="New in the post-check">${segHtml(r.post)}</div>`;
+        // A whole new line is already coloured; marking its text too would double up.
+        if (r.kind === "added") return `<div class="ln ln-add" title="New in the post-check">${esc(lineText(r.post))}</div>`;
         return `<div class="ln${r.kind === "changed" ? " ln-chg" : ""}">${segHtml(r.post, "hot") || " "}</div>`;
       }).join("")}</div></div>`;
     }
@@ -614,7 +617,9 @@ export default {
       const cell = (segs, kind, side) => {
         if (!segs) return '<td class="ln ln-gap"></td>';
         const cls = kind === "same" ? "" : side === "pre" ? (kind === "removed" ? " ln-del" : " ln-chg") : (kind === "added" ? " ln-add" : " ln-chg");
-        return `<td class="ln${cls}">${segHtml(segs, side === "pre" ? "del" : "hot") || " "}</td>`;
+        const body = kind === "added" || kind === "removed" ? esc(lineText(segs))
+          : segHtml(segs, side === "pre" ? "del" : "hot");
+        return `<td class="ln${cls}">${body || " "}</td>`;
       };
       return `<div class="term"><table class="term-sbs">
         <thead><tr><th>Pre-check</th><th>Post-check</th></tr></thead>

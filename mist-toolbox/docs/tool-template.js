@@ -1,16 +1,19 @@
 // A complete, working Mist Toolbox tool to copy from.
 //
-// It counts the devices at every site from one org inventory call. Rename the
+// It counts the devices at one site, or at every site, from one org inventory
+// call. `scope: "site"` gives it the site picker and the "All sites in the
+// org" box; ctx.targetSites() says which sites were chosen. Rename the
 // file (e.g. my-report.js), change id / name / description, replace run(), and
 // install it with the toolbox's "Manage tools" button.
 
 export default {
   id: "device-count",
   name: "Device Count by Site",
-  description: "How many access points, switches and gateways each site has, "
-    + "from the org inventory, with a total row.",
+  description: "How many access points, switches and gateways one site, or every site "
+    + "in the org, has — from the org inventory, with a total row.",
   tag: "Mist API",
   needs: { mistToken: true, org: true },
+  scope: "site",
   params: [
     {
       id: "connectedOnly",
@@ -24,10 +27,15 @@ export default {
     const { getAll, log } = ctx;
     log(`Org: ${ctx.orgName}`, "info");
 
-    const sites = await getAll(`/orgs/${ctx.orgId}/sites`);
-    const siteName = Object.fromEntries(sites.map((s) => [s.id, s.name || s.id]));
+    const scope = await ctx.targetSites();
+    const siteName = Object.fromEntries(scope.orgSites.map((s) => [s.id, s.name || s.id]));
+    const wanted = new Set(scope.sites.map((s) => s.id));
+    log(`Scope: ${scope.label}`, "info");
 
-    const inventory = await getAll(`/orgs/${ctx.orgId}/inventory`);
+    // The inventory call is org-wide; keep the chosen sites (and, for the
+    // whole org, devices not yet assigned to any site).
+    const inventory = (await getAll(`/orgs/${ctx.orgId}/inventory`))
+      .filter((d) => wanted.has(d.site_id) || (scope.all && !d.site_id));
     const counted = ctx.params.connectedOnly ? inventory.filter((d) => d.connected) : inventory;
     log(`${counted.length} device(s) counted of ${inventory.length} in inventory.`, "info");
 
@@ -57,7 +65,7 @@ export default {
     log("Done.", "ok");
     return {
       summary: `${counted.length} device(s) across ${rows.length - 1} site(s)`,
-      filename: ctx.stampedName("mist_device_count", ctx.orgName, "xlsx"),
+      filename: ctx.stampedName("mist_device_count", scope.fileLabel, "xlsx"),
       sheets: [ctx.xlsx.sheet("Devices by Site", columns, rows)],
       preview: { title: "Devices by Site", columns, rows },
     };

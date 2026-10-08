@@ -5,6 +5,7 @@ import { download, safeName, stampedName, toCsv } from "../lib/download.js";
 import { epochToUtc, esc, fmtBytes, fmtMac, fmtTime, previewTable } from "../lib/dom.js";
 import { getAll, searchAll } from "../lib/paginate.js";
 import { STYLE, colLetter, sheet, workbook } from "../lib/xlsx.js";
+import { resolveSites } from "../lib/scope.js";
 import { POOL_LIMIT, listSites, mistGet, mistGetFull, pool } from "../mist.js";
 
 export const HOST = "api.gc2.mist.com";
@@ -53,6 +54,7 @@ export function testCtx({ orgId = "org-1", orgName = "Acme Corp", params = {} } 
     getAll: (p, q, onPage) => getAll({ ...paged, onPage }, p, q),
     searchAll: (p, q, onPage) => searchAll({ ...paged, onPage }, p, q),
     listSites: () => listSites(token, HOST, orgId),
+    targetSites: () => resolveSites({ getAll: (p, q) => getAll(paged, p, q), orgId, orgName, params }),
     pool, POOL_LIMIT,
     xlsx: { workbook, sheet, STYLE, colLetter },
     download, stampedName, safeName, toCsv,

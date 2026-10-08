@@ -54,17 +54,29 @@ press **End session**, or whenever the tab closes or reloads.
 
 ## The tools
 
-| Tool | Ported from | Needs |
-|---|---|---|
-| **Disconnect Console** | the existing v1.4 extension | its own token (opens in its own tab) |
-| **SSID Report** | `mist_ssid_report.py` | Mist token + org |
-| **Switch Software Report** | `mist_switch_report.js` | Mist token + org |
-| **Wi-Fi Clients Export** | `site-wifi-clients.py` | Mist token + org |
-| **IP Blocks / IRB Report** | `mist_ip_blocks.py` | Mist token + org |
-| **Switch Port Inventory** | `mist_switch_port_inventory.py` | Mist token + org |
-| **SSR Pre/Post Check** | `pre-post-check-gui.py` | Conductor URL + username/password |
+| Tool | Ported from | Level | Needs |
+|---|---|---|---|
+| **Disconnect Console** | the existing v1.4 extension | Site · Client | its own token (opens in its own tab) |
+| **SSID Report** | `mist_ssid_report.py` | Site · Org | Mist token + org |
+| **Switch Software Report** | `mist_switch_report.js` | Site · Org | Mist token + org |
+| **Switch Config Export** | `mist_ip_blocks.py --save-configs` | Site · Org | Mist token + org |
+| **Site Alarms** | `site-alarms.js` (added as written) | Site · Org | Mist token + org |
+| **Wi-Fi Clients Export** | `site-wifi-clients.py` | Site · Org | Mist token + org |
+| **IP Blocks / IRB Report** | `mist_ip_blocks.py` | Site · Org | Mist token + org |
+| **Switch Port Inventory** | `mist_switch_port_inventory.py` | Site · Org | Mist token + org |
+| **SSR Pre/Post Check** | `pre-post-check-gui.py` | SSR Conductor | Conductor URL + username/password |
+
+Every **Site · Org** tool has an *All sites in the org* checkbox (ticked by default) and a
+*Site* picker; untick the box to report on one site. The level is shown on each tool's card.
+Switch Config Export downloads one `.txt` for a single switch, or one `.zip` with a folder per
+site plus `index.csv` when there are several.
 
 `parse_bgp_homing.py` was deliberately left out.
+
+Screenshots of every tool, taken against synthetic data, are in
+[`docs/screenshots/`](docs/screenshots/README.md). Regenerate them with
+`node --experimental-websocket scripts/screenshots/capture.mjs`, which loads the extension
+into headless Chromium and answers every API call from `scripts/screenshots/fixtures.mjs`.
 
 ### Differences from the Python worth knowing
 

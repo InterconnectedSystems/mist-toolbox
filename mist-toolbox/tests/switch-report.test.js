@@ -82,3 +82,11 @@ test("helpers", () => {
   assert.deepEqual(vcMembers({}), { count: 1, detail: "" });
   assert.deepEqual(vcMembers({ module_stat: [{ serial: "x" }] }), { count: 1, detail: "" });
 });
+
+test("one site: only that site's switches", async () => {
+  const calls = stubMist(routes());
+  const result = await tool.run(testCtx({ params: { allSites: false, siteId: "site-1" } }));
+  assert.deepEqual(sheetNamed(result, "Switches").rows.map((r) => r.name), ["core", "idf-2"]);
+  assert.ok(!calls.some((c) => c.startsWith("/sites/site-2/")));
+  assert.match(result.filename, /^mist_switches_Acme_Corp_HQ_/);
+});

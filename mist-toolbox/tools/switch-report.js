@@ -12,10 +12,11 @@
 export default {
   id: "switch-report",
   name: "Switch Software Report",
-  description: "Every switch in an org, site by site, with model, serial, MAC, software "
+  description: "Every switch at one site or across an org, site by site, with model, serial, MAC, software "
     + "version, status, IP, uptime and per-member versions for Virtual Chassis.",
   tag: "Mist API",
   needs: { mistToken: true, org: true },
+  scope: "site",
   params: [],
 
   async run(ctx) {
@@ -23,9 +24,9 @@ export default {
 
     log(`Org: ${ctx.orgName}`, "info");
 
-    const sites = (await getAll(`/orgs/${ctx.orgId}/sites`)).sort(byName);
-    if (!sites.length) throw new Error("This org has no sites.");
-    log(`${sites.length} site(s).`, "info");
+    const scope = await ctx.targetSites();
+    const { sites } = scope;
+    log(`Scope: ${scope.label}.`, "info");
 
     const errors = [];
     let done = 0;
@@ -71,7 +72,7 @@ export default {
       summary: `${rows.length} switch(es) across ${sites.length} site(s), `
         + `${versions.size} distinct software version(s)`
         + (errors.length ? `, ${errors.length} site(s) unreadable` : ""),
-      filename: ctx.stampedName("mist_switches", ctx.orgName, "xlsx"),
+      filename: ctx.stampedName("mist_switches", scope.fileLabel, "xlsx"),
       sheets: [ctx.xlsx.sheet("Switches", columns, rows, { tabColor: "1F4E78" })],
       preview: { title: "Switches", columns, rows },
     };

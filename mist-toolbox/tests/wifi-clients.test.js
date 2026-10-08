@@ -122,3 +122,12 @@ test("the file name is timestamped, unlike the Python's fixed name", async () =>
   const result = await tool.run(testCtx());
   assert.match(result.filename, /^mist_wifi_clients_Acme_Corp_\d{8}_\d{6}\.xlsx$/);
 });
+
+test("one site: only that site's clients", async () => {
+  const calls = stubMist(routes());
+  const result = await tool.run(testCtx({ params: { allSites: false, siteId: "s1" } }));
+  const rows = sheetNamed(result, "WiFi_Clients").rows;
+  assert.ok(rows.length && rows.every((r) => r.site_name === "HQ"));
+  assert.ok(!calls.some((c) => c.startsWith("/sites/s2/")));
+  assert.match(result.filename, /^mist_wifi_clients_Acme_Corp_HQ_/);
+});

@@ -33,11 +33,12 @@ const cols = (names) => names.map((n) => ({ header: n, key: n }));
 export default {
   id: "port-inventory",
   name: "Switch Port Inventory",
-  description: "Every physical switch port in an org on one sheet — 41 columns of live status, "
+  description: "Every physical switch port at one site or across an org on one sheet — 41 columns of live status, "
     + "speed, VLAN, PoE, LLDP neighbour and STP detail, merged with each port's configured "
     + "profile and attributed to the right virtual-chassis member.",
   tag: "Mist API",
   needs: { mistToken: true, org: true },
+  scope: "site",
   params: [
     {
       id: "skipConfig",
@@ -53,8 +54,10 @@ export default {
     const org = ctx.orgId;
 
     // ---- Sites -------------------------------------------------------------
-    const sites = await getAll(`/orgs/${org}/sites`);
-    log(`${sites.length} site(s).`, "info");
+    const scope = await ctx.targetSites();
+    const { sites } = scope;
+    const inScope = (siteId) => scope.all || siteId === sites[0].id;
+    log(`Scope: ${scope.label}.`, "info");
 
     // ---- Switches ----------------------------------------------------------
     const store = new Map();
@@ -116,8 +119,12 @@ export default {
     }
     log(`Site device lists: ${siteDeviceCount} switch(es); port_config inline on ${configsFromList}.`, "info");
 
-    const switches = [...store.values()];
-    if (!switches.length) throw new Error("No switches found in this org.");
+    // Inventory is fetched org-wide (it carries the VC member rows); a
+    // single-site run keeps only that site's switches.
+    const switches = [...store.values()].filter((sw) => scope.all || inScope(sw.site_id));
+    if (!switches.length) {
+      throw new Error(scope.all ? "No switches found in this org." : `No switches at ${scope.label}.`);
+    }
     log(`${switches.length} unique switch(es); `
       + `${switches.filter((s) => s.site_id).length} assigned, `
       + `${switches.filter((s) => s.connected === true).length} connected, `
@@ -125,7 +132,9 @@ export default {
 
     // ---- Port stats --------------------------------------------------------
     let orgPorts = [];
-    try {
+    // For one site, the org-wide port search and device stats would pull the
+    // whole org to keep a sliver; the per-site fallbacks below cover it.
+    if (scope.all) try {
       orgPorts = await searchAll(`/orgs/${org}/stats/ports/search`, { device_type: "switch" },
         (done) => progress(done, done, "org port stats"));
       log(`Org port search: ${orgPorts.length} row(s).`, "info");
@@ -136,7 +145,7 @@ export default {
     // ---- Device stats ------------------------------------------------------
     let switchStats = [];
     let orgStatsOk = false;
-    try {
+    if (scope.all) try {
       switchStats = await getAll(`/orgs/${org}/stats/devices`, { type: "switch", status: "all" });
       orgStatsOk = true;
       log(`Org device stats: ${switchStats.length} switch(es).`, "info");
@@ -336,6 +345,7 @@ export default {
     const summaryPairs = [
       ["Org", ctx.orgName],
       ["Org ID", org],
+      ["Scope", scope.all ? "All sites" : `Site: ${scope.label}`],
       ["Mist API host", ctx.host],
       ["Generated", new Date().toLocaleString()],
       ["Sites", sites.length],
@@ -355,7 +365,7 @@ export default {
     const { sheet } = ctx.xlsx;
     return {
       summary: `${portRows.length} ports across ${switches.length} switches and ${sites.length} sites`,
-      filename: ctx.stampedName("mist_switch_ports", ctx.orgName, "xlsx"),
+      filename: ctx.stampedName("mist_switch_ports", scope.fileLabel, "xlsx"),
       sheets: [
         sheet("Summary", cols(["Item", "Value"]),
           summaryPairs.map(([Item, Value]) => ({ Item, Value })),

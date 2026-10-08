@@ -294,9 +294,20 @@ export async function mistConnect(token, host) {
 }
 
 export async function listSites(token, host, orgId) {
-  const data = await mistGet(host, token, `/orgs/${orgId}/sites`);
+  // Paged: a single GET stops at Mist's first page, which silently dropped
+  // sites from every site picker on a large org. X-Page-Total is the real
+  // count when present; a short page is not trusted to mean the end.
+  const rows = [];
+  for (let page = 1; page <= 200; page += 1) {
+    const { data, headers } = await mistGetFull(host, token, `/orgs/${orgId}/sites`, { limit: 1000, page });
+    const batch = asArray(data);
+    rows.push(...batch);
+    const total = Number.parseInt(headers?.get?.("X-Page-Total") ?? "", 10);
+    if (!batch.length) break;
+    if (Number.isFinite(total) ? rows.length >= total : batch.length < 1000) break;
+  }
   const sites = [];
-  for (const row of asArray(data)) {
+  for (const row of rows) {
     if (typeof row.id === "string") sites.push({ id: row.id, name: String(row.name || row.id) });
   }
   sites.sort((a, b) => (a.name.toLowerCase() < b.name.toLowerCase() ? -1 : a.name.toLowerCase() > b.name.toLowerCase() ? 1 : 0));

@@ -133,3 +133,5 @@ body.radio-fs-open { overflow:hidden; }
 .term-block { border:1px solid var(--border); border-radius:12px; padding:.5rem .7rem; margin-top:.6rem; }
 .term-block > summary { cursor:pointer; font-size:13px; font-weight:600; display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; padding:.2rem 0; }
 .term-block[open] > summary { margin-bottom:.5rem; }
+.scope-chip { display:inline-flex; align-items:center; border-radius:999px; padding:.1rem .5rem; font-size:11px; font-weight:600; letter-spacing:.02em; background:color-mix(in oklab,var(--accent) 16%,var(--surface-2)); color:var(--fg); border:1px solid color-mix(in oklab,var(--accent) 35%,var(--border)); white-space:nowrap; vertical-align:middle; }
+.legend mark.hot { background:#d29922; color:#0d1117; border-radius:2px; padding:0 .15rem; }

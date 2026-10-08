@@ -134,3 +134,14 @@ test("describe_* helpers match the Python", () => {
   assert.equal(wlanSource({ site_id: "s" }, {}), "Site");
   assert.equal(wlanSource({}, {}), "Org");
 });
+
+test("one site: only that site is queried and reported", async () => {
+  const calls = stubMist(routes());
+  const result = await tool.run(testCtx({ params: { allSites: false, siteId: "site-2" } }));
+  assert.deepEqual(sheetNamed(result, "SSIDs by Site").rows.map((r) => r.ssid), ["Branch-Net"]);
+  assert.deepEqual(sheetNamed(result, "Site Summary").rows.map((r) => r.site), ["Branch"]);
+  assert.ok(!calls.some((c) => c.startsWith("/sites/site-1/")), "HQ is never fetched");
+  assert.match(result.filename, /^mist_ssids_Acme_Corp_Branch_/);
+  const info = sheetNamed(result, "Info").rows;
+  assert.ok(info.some((r) => Array.isArray(r) && r[0] === "Scope" && r[1] === "Site: Branch"));
+});

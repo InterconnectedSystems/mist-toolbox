@@ -11,10 +11,11 @@
 export default {
   id: "ssid-report",
   name: "SSID Report",
-  description: "Every SSID that applies to each site in an org, including ones pushed down from "
+  description: "Every SSID that applies at one site or at every site in an org, including ones pushed down from "
     + "org-level WLAN templates, with auth type, VLAN, bands and which template it came from.",
   tag: "Mist API",
   needs: { mistToken: true, org: true },
+  scope: "site",
   params: [
     {
       id: "skipEmpty",
@@ -42,9 +43,9 @@ export default {
       log("Could not read WLAN templates — SSID sources will show the raw ID.", "info");
     }
 
-    const sites = await getAll(`/orgs/${ctx.orgId}/sites`);
-    if (!sites.length) throw new Error("This org has no sites.");
-    log(`${sites.length} site(s).`, "info");
+    const scope = await ctx.targetSites();
+    const { sites } = scope;
+    log(`Scope: ${scope.label}.`, "info");
 
     const errors = [];
     let done = 0;
@@ -102,6 +103,7 @@ export default {
     const info = [
       ["Org", ctx.orgName],
       ["Org ID", ctx.orgId],
+      ["Scope", scope.all ? "All sites" : `Site: ${scope.label}`],
       ["Cloud", `https://${ctx.host}/api/v1`],
       ["Generated", new Date().toLocaleString()],
       ["Sites", sites.length],
@@ -114,7 +116,7 @@ export default {
     return {
       summary: `${detail.length} SSID rows across ${sites.length} sites`
         + (errors.length ? `, ${errors.length} site(s) unreadable` : ""),
-      filename: ctx.stampedName("mist_ssids", ctx.orgName, "xlsx"),
+      filename: ctx.stampedName("mist_ssids", scope.fileLabel, "xlsx"),
       sheets: [
         sheet("SSIDs by Site", detailCols, detail, { tabColor: "1F4E79" }),
         sheet("Site Summary", [

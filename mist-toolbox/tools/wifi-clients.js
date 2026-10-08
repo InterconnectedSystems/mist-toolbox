@@ -69,10 +69,11 @@ export function asClientList(data) {
 export default {
   id: "wifi-clients",
   name: "Wi-Fi Clients Export",
-  description: "Every connected Wi-Fi client across all sites in an org, with RF stats, 802.11 "
+  description: "Every connected Wi-Fi client at one site or across all sites in an org, with RF stats, 802.11 "
     + "standard and band labels, UTC last-seen times and flattened guest-portal fields.",
   tag: "Mist API",
   needs: { mistToken: true, org: true },
+  scope: "site",
   notice: "This export contains personal data — usernames, hostnames, MAC and IP addresses, and "
     + "guest names, emails and companies. Handle and store the file accordingly.",
   params: [
@@ -87,9 +88,9 @@ export default {
   async run(ctx) {
     const { getAll, pool, POOL_LIMIT, log, progress } = ctx;
 
-    const sites = await getAll(`/orgs/${ctx.orgId}/sites`);
-    if (!sites.length) throw new Error("This org has no sites.");
-    log(`${sites.length} site(s).`, "info");
+    const scope = await ctx.targetSites();
+    const { sites } = scope;
+    log(`Scope: ${scope.label}.`, "info");
 
     let done = 0;
     const perSite = await pool(POOL_LIMIT, sites.map((site) => async () => {
@@ -159,7 +160,7 @@ export default {
 
     return {
       summary: `${total} clients across ${sites.length} sites`,
-      filename: ctx.stampedName("mist_wifi_clients", ctx.orgName, "xlsx"),
+      filename: ctx.stampedName("mist_wifi_clients", scope.fileLabel, "xlsx"),
       sheets: [
         // freeze_panes(1, 2) in the Python: header row plus the two site columns.
         sheet("WiFi_Clients", clientCols, clientRows, {

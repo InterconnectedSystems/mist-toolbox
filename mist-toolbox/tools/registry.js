@@ -28,6 +28,15 @@ export function validateTool(tool, file) {
     throw new Error(`${where}: "id" must be lowercase letters, digits and dashes.`);
   }
   if (typeof tool.run !== "function") throw new Error(`${where}: "run" must be a function.`);
+  if (tool.scope !== undefined && tool.scope !== "site") {
+    throw new Error(`${where}: "scope" can only be "site".`);
+  }
+  if (tool.scope === "site") {
+    const own = (tool.params || []).find((p) => p && (p.id === "allSites" || p.id === "siteId"));
+    if (own) {
+      throw new Error(`${where}: param "${own.id}" is drawn by the toolbox for scope: "site" tools — remove it.`);
+    }
+  }
   for (const p of tool.params || []) {
     if (!p || typeof p.id !== "string" || !p.id) throw new Error(`${where}: every param needs an "id".`);
     if (p.type && !TOOL_TYPES.has(p.type)) {
@@ -46,7 +55,9 @@ export const BUILTIN_TOOLS = [
   "ip-blocks.js",
   "port-inventory.js",
   "ssid-report.js",
+  "site-alarms.js",
   "ssr-pre-post.js",
+  "switch-configs.js",
   "switch-report.js",
   "wifi-clients.js",
 ];

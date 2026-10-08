@@ -10,6 +10,7 @@
 
 import { FAMILY_LABEL, parseIrbConfig, unitSortKey } from "../lib/junos.js";
 import { isLinkLocal, networkDetails, overlaps } from "../lib/subnet.js";
+import { buildSwitchList, safeFilename } from "../lib/switchlist.js";
 
 const INTERFACE_COLUMNS = [
   "Site", "Switch", "Switch MAC", "Model", "Interface", "VLAN Name", "VLAN ID",
@@ -39,52 +40,7 @@ const cols = (names) => names.map((n) => ({ header: n, key: n }));
 /** _maybe_int: a numeric VLAN id becomes a number so Excel sorts it as one. */
 const maybeInt = (v) => (typeof v === "string" && /^\d+$/.test(v) ? Number(v) : v);
 
-const safeFilename = (t) => String(t).replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_+|_+$/g, "") || "unnamed";
-
-/** build_switch_list: collapse inventory rows into one record per switch or VC. */
-export function buildSwitchList(inventory, sitesById) {
-  const groups = new Map();
-  for (const item of inventory) {
-    const mac = (item.mac || "").toLowerCase();
-    const key = (item.vc_mac || mac).toLowerCase();
-    if (!key) continue;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(item);
-  }
-
-  const switches = [];
-  for (const [key, members] of groups) {
-    const primary = members.find((m) => (m.mac || "").toLowerCase() === key) || members[0];
-    const isPrimary = (primary.mac || "").toLowerCase() === key;
-    const deviceId = (isPrimary && primary.id) || `00000000-0000-0000-1000-${key}`;
-    const siteId = members.find((m) => m.site_id)?.site_id || null;
-    const name = primary.name || primary.hostname
-      || members.find((m) => m.name)?.name || key;
-    const models = [...new Set(members.map((m) => m.model).filter(Boolean))].sort();
-    const serials = members.map((m) => m.serial).filter(Boolean);
-
-    switches.push({
-      name,
-      mac: key,
-      model: models.join(", "),
-      serials: serials.join(", "),
-      members: members.length,
-      connected: members.some((m) => m.connected),
-      device_id: deviceId,
-      site_id: siteId,
-      site_name: siteId ? (sitesById[siteId]?.name || "") : "",
-      status: "",
-      error: "",
-      cli_lines: 0,
-      irb_units: 0,
-      addresses: 0,
-    });
-  }
-
-  switches.sort((a, b) => a.site_name.toLowerCase().localeCompare(b.site_name.toLowerCase())
-    || a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
-  return switches;
-}
+export { buildSwitchList, safeFilename };
 
 /** irb_rows_for_switch */
 export function irbRowsForSwitch(sw, parsed) {
@@ -248,40 +204,38 @@ export function summarizeNetworks(ifaceRows) {
 export default {
   id: "ip-blocks",
   name: "IP Blocks / IRB Report",
-  description: "Every IRB (switch VLAN) interface address across an org, with subnet, mask, "
+  description: "Every IRB (switch VLAN) interface address at one site or across an org, with subnet, mask, "
     + "broadcast and usable range computed, plus duplicate and overlapping networks flagged "
     + "across sites.",
   tag: "Mist API",
   needs: { mistToken: true, org: true },
-  params: [
-    {
-      id: "saveConfigs",
-      label: "Also download each switch's raw config",
-      type: "checkbox",
-      default: false,
-      hint: "One .txt per switch, as the script's --save-configs did. Can be a lot of files.",
-    },
-  ],
+  scope: "site",
+  params: [],
 
   async run(ctx) {
     const { getAll, mistGet, pool, POOL_LIMIT, log, progress } = ctx;
 
-    const sites = await getAll(`/orgs/${ctx.orgId}/sites`);
-    const sitesById = Object.fromEntries(sites.filter((s) => s.id).map((s) => [s.id, s]));
-    log(`${sites.length} site(s).`, "info");
+    const scope = await ctx.targetSites();
+    const { sites } = scope;
+    const sitesById = Object.fromEntries(scope.orgSites.map((s) => [s.id, s]));
+    log(`Scope: ${scope.label}.`, "info");
 
+    // One org inventory call either way; a single-site run keeps that site's switches.
     const inventory = await getAll(`/orgs/${ctx.orgId}/inventory`, { type: "switch", vc: true });
-    const switches = buildSwitchList(inventory, sitesById);
+    const switches = buildSwitchList(inventory, sitesById)
+      .filter((sw) => scope.all || sw.site_id === sites[0].id);
     const assigned = switches.filter((s) => s.site_id);
     for (const sw of switches) {
       if (!sw.site_id) sw.status = "Skipped - not assigned to a site";
     }
     log(`${inventory.length} inventory record(s) -> ${switches.length} switch(es) / VC, `
       + `${assigned.length} assigned to a site.`, "info");
-    if (!assigned.length) throw new Error("No switches in this org are assigned to a site.");
+    if (!assigned.length) {
+      throw new Error(scope.all ? "No switches in this org are assigned to a site."
+        : `No switches at ${scope.label}.`);
+    }
 
     const ifaceRows = [];
-    const configFiles = [];
     let done = 0;
 
     await pool(POOL_LIMIT, assigned.map((sw) => async () => {
@@ -294,13 +248,6 @@ export default {
 
         sw.cli_lines = cli.length;
         if (!cli.length) { sw.status = "No config returned"; return; }
-
-        if (ctx.params.saveConfigs) {
-          configFiles.push({
-            name: `${safeFilename(`${sw.site_name}__${sw.name}__${sw.mac}`)}.txt`,
-            blob: new Blob([`${cli.map(String).join("\n")}\n`], { type: "text/plain" }),
-          });
-        }
 
         const parsed = parseIrbConfig(cli);
         const rows = irbRowsForSwitch(sw, parsed);
@@ -353,6 +300,7 @@ export default {
     const summaryPairs = [
       ["Org", ctx.orgName],
       ["Org ID", ctx.orgId],
+      ["Scope", scope.all ? "All sites" : `Site: ${scope.label}`],
       ["Mist API host", ctx.host],
       ["Generated", new Date().toLocaleString()],
       ["Sites", sites.length],
@@ -373,8 +321,7 @@ export default {
     return {
       summary: `${staticRows.length} IRB addresses, ${netRows.length} networks, `
         + `${overlapCount} overlapping, ${netRows.filter((r) => r["Seen At Multiple Sites"] === "Yes").length} at multiple sites`,
-      filename: ctx.stampedName("mist_irb", ctx.orgName, "xlsx"),
-      files: configFiles,
+      filename: ctx.stampedName("mist_irb", scope.fileLabel, "xlsx"),
       sheets: [
         sheet("Summary", cols(["Item", "Value"]),
           summaryPairs.map(([Item, Value]) => ({ Item, Value })),
