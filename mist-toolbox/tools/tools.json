@@ -1,0 +1,9 @@
+[
+  "disconnect-console.js",
+  "ip-blocks.js",
+  "port-inventory.js",
+  "ssid-report.js",
+  "ssr-pre-post.js",
+  "switch-report.js",
+  "wifi-clients.js"
+]
