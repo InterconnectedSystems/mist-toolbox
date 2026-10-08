@@ -97,6 +97,16 @@ function inventory() {
   return rows;
 }
 
+// Access points and gateways, for tools that read the whole inventory.
+const OTHER_DEVICES = [
+  ...Array.from({ length: 14 }, (_, i) => ({ type: "ap", mac: mac(0x600 + i), model: "AP45", site_id: "site-hq", connected: i !== 9 })),
+  ...Array.from({ length: 5 }, (_, i) => ({ type: "ap", mac: mac(0x700 + i), model: "AP34", site_id: "site-ott", connected: true })),
+  ...Array.from({ length: 3 }, (_, i) => ({ type: "ap", mac: mac(0x800 + i), model: "AP24", site_id: "site-mtl", connected: i !== 2 })),
+  { type: "gateway", mac: mac(0x150), model: "SRX320", site_id: "site-hq", connected: true },
+  { type: "gateway", mac: mac(0x250), model: "SSR120", site_id: "site-ott", connected: true },
+  { type: "ap", mac: mac(0x999), model: "AP45", connected: false },
+];
+
 const PORT_USAGES = {
   access: { mode: "access", port_network: "data", poe_disabled: false },
   ap: { mode: "trunk", port_network: "data", networks: ["data", "voice", "guest"] },
@@ -182,7 +192,10 @@ export function mist(path, query) {
   if (path === "/const/alarm_defs") return { body: ALARM_DEFS };
   if (path === `/orgs/${ORG_ID}/sites`) return { body: SITES };
   if (path === `/orgs/${ORG_ID}/templates`) return { body: TEMPLATES };
-  if (path === `/orgs/${ORG_ID}/inventory`) return { body: inventory() };
+  if (path === `/orgs/${ORG_ID}/inventory`) {
+    const type = query.get("type");
+    return { body: type && type !== "switch" ? [] : type === "switch" ? inventory() : [...inventory(), ...OTHER_DEVICES] };
+  }
   if (path === `/orgs/${ORG_ID}/inventory/search`) {
     const rows = SWITCHES.map((sw) => ({ ...inventory().find((x) => x.mac === sw.mac),
       members: (sw.vc || []).map((m, i) => ({ mac: m.mac, serial: m.serial, member_id: i + 1 })) }));

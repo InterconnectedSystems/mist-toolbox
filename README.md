@@ -1,80 +1,108 @@
 # Mist Toolbox
 
-A Chrome / Edge extension of read-only reporting tools for **Juniper Mist** and **Juniper SSR**,
-replacing a set of Python and Node scripts. No Python, no server, nothing to install beyond
-the extension: paste a read-only Mist API token, pick an org, pick a tool, and the report
-downloads as `.xlsx` (or `.txt` / `.zip` for switch configs).
+**Read-only reporting for Juniper Mist and Juniper SSR, in a browser extension that grows
+with you.** Paste a read-only Mist API token, pick an org (and optionally one site), pick a
+tool, and get the answer on screen and as a styled Excel workbook. There is no Python, no
+server and no install beyond the extension. You can add your own tools too: the extension
+ships its own **LLM spec**, so any AI assistant can turn a script or a one-line idea into a new
+tool you can install with one click.
 
-- **Extension:** [`mist-toolbox/`](mist-toolbox/): install steps, tool list, security model
-  and how to add your own tools are in its [README](mist-toolbox/README.md).
-- **Original scripts** (`mist_*.py`, `site-wifi-clients.py`, `pre-post-check-gui.py`,
-  `mist_switch_report.js`, `site-alarms.js`) are kept alongside for reference and for
-  checking the ports' output against them.
+**[Install it](INSTALL.md)** · **[Add your own tools](ADDING_TOOLS.md)** · [Extension README](mist-toolbox/README.md)
+
+![The tool menu](mist-toolbox/docs/screenshots/02-home.png)
+
+## What you can do with it
+
+### Wireless
+- **Find every SSID that actually applies at each site**, including ones pushed down from org
+  WLAN templates, with auth type, VLAN, bands and which template it came from. *(SSID Report)*
+- **Export every connected Wi-Fi client**: hostname, user, MAC, IP, SSID, band, 802.11
+  standard, RSSI/SNR, last seen and guest-portal details, one site or the whole org.
+  *(Wi-Fi Clients Export)*
+- **Root-cause why one client keeps disconnecting**: RF and SNR, 802.11 reason codes, DHCP
+  after roam, RRM channel changes, DFS radar on the AP it was on, and Teams/Zoom call quality,
+  correlated into a verdict. *(Disconnect Console)*
+
+### Switching
+- **Audit switch software**: every switch's model, serial, firmware, status, IP, uptime and
+  per-member versions for Virtual Chassis. *(Switch Software Report)*
+- **Inventory every switch port**: 41 columns of live status, speed, VLAN, PoE draw, LLDP
+  neighbour and STP, merged with the configured port profile and attributed to the right VC
+  member. *(Switch Port Inventory)*
+- **Back up switch configurations**: one `.txt` per switch, or a `.zip` with a folder per site
+  and an index. *(Switch Config Export)*
+- **Map your IP space**: every IRB/VLAN interface address with subnet, mask, broadcast and
+  usable range, with duplicate and overlapping networks flagged across sites.
+  *(IP Blocks / IRB Report)*
+
+### Operations
+- **See what's alarming**: every alarm over the past day or week, by site and by type, with
+  severity, affected devices and acknowledgement status. *(Site Alarms)*
+- **Prove a change window was clean** on Juniper SSR: snapshot BGP, OSPF, interfaces,
+  adjacencies, node status, sessions and alarms on every router before a change, then again
+  after. The output is laid out like the CLI and every changed field is highlighted.
+  *(SSR Pre/Post Check)*
+
+### Every report
+- **One site or the whole org**: tick *All sites in the org*, or pick a site.
+- **Excel output**: header styling, frozen header row, filters and sized columns,
+  timestamped filenames, saved to your downloads.
+- **Read-only by design**: Mist tools only ever `GET`. The token stays in that tab's memory,
+  is never saved, only goes to the Mist region you picked, and is wiped after 30 idle minutes.
+
+## Additive: bring your own tools, with the LLM spec built in
+
+The tools above are a starting point. A tool is one JavaScript file, and the toolbox provides
+everything around it: the menu card, credentials, site picker, settings form, progress, preview
+and Excel output. So adding a tool doesn't mean changing the extension.
+
+You don't have to write the file either. The extension carries **its own LLM spec**,
+[`TOOL_PROMPT.md`](mist-toolbox/docs/TOOL_PROMPT.md): a ready-made prompt that teaches any AI
+assistant the tool format, the helpers, the security rules and a full working example.
+
+1. **Manage tools → Copy AI prompt**
+2. Paste it into Claude, ChatGPT, Copilot or any assistant, then paste your existing
+   Python/Node script, or just describe the report you want, below the marked line.
+3. Save the reply as a `.js` file, then **Manage tools → Install**. It is checked first,
+   written into the extension, and appears in the menu straight away.
+4. Remove it any time with the **Remove** button on its card.
+
+![An AI-written tool passes the check](mist-toolbox/docs/screenshots/18-manage-check-passed.png)
+
+![The new tool in the menu, marked added](mist-toolbox/docs/screenshots/20-home-added-tool.png)
+
+The full walkthrough with screenshots is in **[ADDING_TOOLS.md](ADDING_TOOLS.md)**.
 
 ## Install
 
-1. Download or clone this repository.
-2. Open `chrome://extensions` (or `edge://extensions`), turn on **Developer mode**.
-3. **Load unpacked** → select the `mist-toolbox` folder. Pin the icon.
+Chrome or Edge, on Windows, macOS or Linux:
+
+1. **Code → Download ZIP** on this page (or `git clone`), and unzip it somewhere permanent.
+2. Open `chrome://extensions` (or `edge://extensions`) and turn on **Developer mode**.
+3. **Load unpacked** → select the **`mist-toolbox`** folder (the one with `manifest.json`).
+4. Pin the icon, click it, choose your region, paste a read-only API token, **Validate**.
+
+Details, updating and troubleshooting: **[INSTALL.md](INSTALL.md)**.
 
 ## Screenshots
 
-All screenshots use synthetic data ("Demo Org", example.com names, documentation and private
-addresses). They are regenerated with
-`node --experimental-websocket mist-toolbox/scripts/screenshots/capture.mjs`.
+All screenshots use synthetic data ("Demo Org", example.com names, private addresses). They are
+generated by `node --experimental-websocket mist-toolbox/scripts/screenshots/capture.mjs`,
+which drives the real extension in headless Chromium.
 
-### Tool menu — each card shows whether the tool works per site / org, per client, or against an SSR Conductor
+| | |
+|---|---|
+| ![Switch Software Report, one site](mist-toolbox/docs/screenshots/04-switch-report-single-site.png)<br>**Switch Software Report**, one site | ![SSID Report](mist-toolbox/docs/screenshots/03-ssid-report.png)<br>**SSID Report** |
+| ![Switch Port Inventory](mist-toolbox/docs/screenshots/09-port-inventory.png)<br>**Switch Port Inventory** | ![Switch Config Export](mist-toolbox/docs/screenshots/05-switch-config-export.png)<br>**Switch Config Export** |
+| ![IP Blocks / IRB Report](mist-toolbox/docs/screenshots/08-ip-blocks.png)<br>**IP Blocks / IRB Report** | ![Site Alarms](mist-toolbox/docs/screenshots/06-site-alarms.png)<br>**Site Alarms** |
+| ![Wi-Fi Clients Export](mist-toolbox/docs/screenshots/07-wifi-clients.png)<br>**Wi-Fi Clients Export** | ![Disconnect Console](mist-toolbox/docs/screenshots/13-disconnect-console.png)<br>**Disconnect Console** |
+| ![SSR post-check, changes highlighted](mist-toolbox/docs/screenshots/11-ssr-post-highlighted.png)<br>**SSR Pre/Post**: changed fields highlighted | ![SSR pre and post side by side](mist-toolbox/docs/screenshots/12-ssr-side-by-side.png)<br>**SSR Pre/Post**: side by side |
 
-![Tool menu — each card shows whether the tool works per site / org, per client, or against an SSR Conductor](mist-toolbox/docs/screenshots/02-home.png)
+Every screenshot with a caption: [`mist-toolbox/docs/screenshots/`](mist-toolbox/docs/screenshots/README.md).
 
-### Switch Software Report for one site: untick **All sites in the org**, pick a site
+## What's in this repository
 
-![Switch Software Report for one site: untick **All sites in the org**, pick a site](mist-toolbox/docs/screenshots/04-switch-report-single-site.png)
-
-### SSID Report — every SSID per site, including ones pushed from org templates
-
-![SSID Report — every SSID per site, including ones pushed from org templates](mist-toolbox/docs/screenshots/03-ssid-report.png)
-
-### Switch Config Export — one .txt per switch, zipped with a folder per site
-
-![Switch Config Export — one .txt per switch, zipped with a folder per site](mist-toolbox/docs/screenshots/05-switch-config-export.png)
-
-### Site Alarms — past 7 days across all sites
-
-![Site Alarms — past 7 days across all sites](mist-toolbox/docs/screenshots/06-site-alarms.png)
-
-### Wi-Fi Clients Export
-
-![Wi-Fi Clients Export](mist-toolbox/docs/screenshots/07-wifi-clients.png)
-
-### IP Blocks / IRB Report — subnets computed, duplicates across sites flagged
-
-![IP Blocks / IRB Report — subnets computed, duplicates across sites flagged](mist-toolbox/docs/screenshots/08-ip-blocks.png)
-
-### Switch Port Inventory
-
-![Switch Port Inventory](mist-toolbox/docs/screenshots/09-port-inventory.png)
-
-### SSR Pre/Post Check — connect, choose routers and checks, run the pre-check
-
-![SSR Pre/Post Check — connect, choose routers and checks, run the pre-check](mist-toolbox/docs/screenshots/10-ssr-pre-check.png)
-
-### SSR post-check output laid out like the CLI, changed fields highlighted
-
-![SSR post-check output laid out like the CLI, changed fields highlighted](mist-toolbox/docs/screenshots/11-ssr-post-highlighted.png)
-
-### SSR pre and post side by side
-
-![SSR pre and post side by side](mist-toolbox/docs/screenshots/12-ssr-side-by-side.png)
-
-### SSR change table, exportable to CSV
-
-![SSR change table, exportable to CSV](mist-toolbox/docs/screenshots/12b-ssr-diff-table.png)
-
-### Disconnect Console — built-in sample investigation
-
-![Disconnect Console — built-in sample investigation](mist-toolbox/docs/screenshots/13-disconnect-console.png)
-
-### Manage tools — install your own tool; a Node script is explained, not installed
-
-![Manage tools — install your own tool; a Node script is explained, not installed](mist-toolbox/docs/screenshots/14-manage-tools.png)
+- [`mist-toolbox/`](mist-toolbox/) is the extension: tools, shared libraries, docs and 198 tests
+  (`npm test`).
+- The original scripts (`mist_*.py`, `site-wifi-clients.py`, `pre-post-check-gui.py`,
+  `mist_switch_report.js`, `site-alarms.js`) are kept for reference and for comparing output.

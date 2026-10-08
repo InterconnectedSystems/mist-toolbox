@@ -1,12 +1,14 @@
 # Mist Toolbox
 
 A Chrome/Edge extension (Manifest V3) that gathers the Juniper Mist and SSR
-reporting tools from `/root/projects/mist/*.py` into one place, plus the existing
+reporting scripts in this repository into one place, plus the existing
 Mist Disconnect Console.
 
 Everything runs in the browser. There is no Python to install, no server to run,
 no backend to secure, and no third-party JavaScript — not one dependency.
 Spreadsheets land in the browser's normal download list.
+
+> **New here?** [Install it](../INSTALL.md) · [Add your own tools with an AI assistant](../ADDING_TOOLS.md)
 
 ## Install
 

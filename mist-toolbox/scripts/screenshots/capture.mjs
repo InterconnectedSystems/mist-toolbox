@@ -12,9 +12,9 @@
 
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { CONDUCTOR, ORG_ID, conductor, mist } from "./fixtures.mjs";
@@ -120,6 +120,64 @@ listeners.push(async (msg) => {
   }).catch(() => {});
 });
 
+// ---- Stand-in folder picker -------------------------------------------------------
+//
+// showDirectoryPicker opens a native dialog a headless run cannot click. For
+// the Manage tools screenshots the page gets a stand-in whose handle reads and
+// writes the real files of the scratch extension copy through a CDP binding,
+// so the install, the live re-import and the new card all genuinely happen.
+
+const FS_SHIM = `(() => {
+  if (window.__fsShim) return;
+  window.__fsShim = true;
+  let seq = 0;
+  const waiting = {};
+  window.__fsDone = (id, ok, value) => { const w = waiting[id]; delete waiting[id]; ok ? w.res(value) : w.rej(new DOMException(value, "NotFoundError")); };
+  const call = (op, path, data) => new Promise((res, rej) => { const id = ++seq; waiting[id] = { res, rej }; window.__fsBridge(JSON.stringify({ id, op, path, data })); });
+  const join = (a, b) => (a ? a + "/" + b : b);
+  const dir = (rel) => ({
+    kind: "directory", name: rel ? rel.split("/").pop() : "mist-toolbox",
+    queryPermission: async () => "granted", requestPermission: async () => "granted",
+    async getDirectoryHandle(n) { await call("isdir", join(rel, n)); return dir(join(rel, n)); },
+    async getFileHandle(n, opts = {}) {
+      const p = join(rel, n);
+      if (!opts.create) await call("isfile", p);
+      return {
+        kind: "file", name: n,
+        getFile: async () => { const t = await call("read", p); return { text: async () => t }; },
+        createWritable: async () => { let buf = ""; return {
+          write: async (t) => { buf = typeof t === "string" ? t : await new Blob([t]).text(); },
+          close: async () => { await call("write", p, buf); } }; },
+      };
+    },
+    async removeEntry(n) { await call("rm", join(rel, n)); },
+  });
+  window.showDirectoryPicker = async () => dir("");
+})()`;
+
+async function fsOp({ op, path, data }) {
+  const full = resolve(extDir, path);
+  if (full !== extDir && !full.startsWith(extDir + sep)) throw new Error("outside the extension");
+  if (op === "isdir") { if (!(await stat(full)).isDirectory()) throw new Error("not a folder"); return true; }
+  if (op === "isfile") { if (!(await stat(full)).isFile()) throw new Error("not a file"); return true; }
+  if (op === "read") return readFile(full, "utf8");
+  if (op === "write") { await writeFile(full, data); return true; }
+  if (op === "rm") { await unlink(full); return true; }
+  throw new Error(`unknown op ${op}`);
+}
+
+await cmd("Runtime.addBinding", { name: "__fsBridge" });
+const fsWrites = [];
+listeners.push(async (msg) => {
+  if (msg.method !== "Runtime.bindingCalled" || msg.params.name !== "__fsBridge") return;
+  const req = JSON.parse(msg.params.payload);
+  let ok = true;
+  let value;
+  try { value = await fsOp(req); } catch (err) { ok = false; value = err.message; }
+  if (req.op === "write" || req.op === "rm") fsWrites.push(`${req.op} ${relative(extDir, resolve(extDir, req.path))}`);
+  await cmd("Runtime.evaluate", { expression: `window.__fsDone(${req.id}, ${ok}, ${JSON.stringify(value)})` });
+});
+
 // ---- Page helpers -------------------------------------------------------------
 
 async function evaluate(expression) {
@@ -201,6 +259,17 @@ await rm(outDir, { recursive: true, force: true });
 await mkdir(outDir, { recursive: true });
 
 try {
+  // chrome://extensions with Developer mode on and the toolbox loaded.
+  await go("chrome://extensions");
+  await evaluate(`(() => {
+    const mgr = document.querySelector("extensions-manager");
+    const bar = mgr.shadowRoot.querySelector("extensions-toolbar");
+    const toggle = bar.shadowRoot.querySelector("#devMode");
+    if (!toggle.checked) toggle.click();
+  })()`);
+  await sleep(800);
+  await shot("00-chrome-extensions", "chrome://extensions — Developer mode on, Mist Toolbox loaded with Load unpacked");
+
   await go(extUrl("toolbox.html"));
   await shot("01-home-signed-out", "Tool menu before a token is validated");
 
@@ -257,22 +326,70 @@ try {
   await waitFor("document.body.innerText.includes('sample')", "console demo", 20000);
   await shot("13-disconnect-console", "Disconnect Console — built-in sample investigation");
 
-  // Manage tools: the panel, with a Node script rejected before install.
+  // ---- Adding a tool with an AI assistant ----------------------------------------
+  await go(extUrl("docs/view.html?doc=TOOL_PROMPT.md"));
+  await waitFor("document.getElementById('doc').textContent.length > 1000", "prompt text");
+  await shot("15-ai-prompt-top", "docs/TOOL_PROMPT.md in the docs viewer — Copy or Download it", ["main > .row", "#doc"]);
+  const promptTail = await evaluate(`(() => { const r = document.getElementById("doc").getBoundingClientRect();
+    return { top: r.bottom + scrollY - 520, height: 536 }; })()`);
+  {
+    const { data } = await cmd("Page.captureScreenshot", { format: "png", captureBeyondViewport: true,
+      clip: { x: 0, y: promptTail.top, width: WIDTH, height: promptTail.height, scale: 1 } });
+    await writeFile(join(outDir, "16-ai-prompt-paste-slot.png"), Buffer.from(data, "base64"));
+    shots.push({ name: "16-ai-prompt-paste-slot", caption: "The end of the prompt — paste your script below the line" });
+    process.stdout.write("  16-ai-prompt-paste-slot.png\n");
+  }
+
+  // Manage tools, signed in so the new tool can run afterwards.
   await go(extUrl("toolbox.html"));
+  await setValue("#token", "demo-token-not-a-real-credential");
+  await click("#btnConnect");
+  await waitFor("!document.getElementById('orgRow').classList.contains('hidden')", "org list");
+  await evaluate(FS_SHIM);
+  await send("Browser.grantPermissions", { origin: `chrome-extension://${extId}`,
+    permissions: ["clipboardReadWrite", "clipboardSanitizedWrite"] }).catch(() => {});
+  await cmd("Emulation.setFocusEmulationEnabled", { enabled: true });
   await click("#btnAddTool");
-  const { root: doc } = await cmd("DOM.getDocument", {});
-  const { nodeId } = await cmd("DOM.querySelector", { nodeId: doc.nodeId, selector: "#toolFile" });
-  await cmd("DOM.setFileInputFiles", { nodeId, files: [resolve(root, "..", "mist_switch_report.js")] });
+  await click("#btnCopyPrompt");
+  await waitFor("/copied|Could not copy/.test(document.getElementById('addStatus').textContent)", "copy prompt");
+  await shot("17-manage-copy-prompt", "Manage tools → Copy AI prompt", ["#addPanel"]);
+
+  const pickFile = async (path) => {
+    const { root: doc } = await cmd("DOM.getDocument", {});
+    const { nodeId } = await cmd("DOM.querySelector", { nodeId: doc.nodeId, selector: "#toolFile" });
+    await cmd("DOM.setFileInputFiles", { nodeId, files: [path] });
+  };
+  await pickFile(resolve(root, "..", "mist_switch_report.js"));
   await waitFor("document.getElementById('checkOut').innerText.includes('Node.js')", "upload check");
   await shot("14-manage-tools", "Manage tools — a Node script is explained, not installed", ["#addPanel"]);
+
+  // The assistant's answer, saved as a .js — here, the shipped template.
+  const answer = join(work, "device-count.js");
+  await cp(join(root, "docs", "tool-template.js"), answer);
+  await pickFile(answer);
+  await waitFor("!document.getElementById('btnInstall').classList.contains('hidden')", "check passed");
+  await shot("18-manage-check-passed", "The AI's .js passes the check — Install", ["#addPanel"]);
+
+  await click("#btnInstall");
+  await waitFor("/Installed|Saved|Not installed/.test(document.getElementById('addStatus').textContent)", "install");
+  const status = await evaluate("document.getElementById('addStatus').textContent");
+  if (!status.startsWith("Installed")) throw new Error(`install did not complete live: ${status}`);
+  await shot("19-manage-installed", "Installed — written to tools/ and listed in tools/tools.json, no reload", ["#addPanel"]);
+  await shot("20-home-added-tool", "The new tool's card, marked added, with a Remove button", ["#toolGrid"]);
+
+  await runTool("device-count");
+  await shot("21-added-tool-run", "The added tool running like any built-in one");
+  process.stdout.write(`  (files written by Install: ${fsWrites.join(", ")})\n`);
 } catch (e) {
   process.stderr.write(`\n${e.stack}\nRequests served:\n  ${served.slice(-25).join("\n  ")}\n`);
   process.exitCode = 1;
 } finally {
   ws.close();
+  // Wait for Chromium to let go of its profile before deleting it.
+  const exited = new Promise((r) => browser.once("exit", r));
   browser.kill();
-  await sleep(300);
-  await rm(work, { recursive: true, force: true });
+  await Promise.race([exited, sleep(5000)]);
+  await rm(work, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 });
 }
 
 if (!process.exitCode) {
