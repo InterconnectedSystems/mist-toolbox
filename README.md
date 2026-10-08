@@ -7,7 +7,12 @@ server and no install beyond the extension. You can add your own tools too: the 
 ships its own **LLM spec**, so any AI assistant can turn a script or a one-line idea into a new
 tool you can install with one click.
 
-**[Install it](INSTALL.md)** · **[Add your own tools](ADDING_TOOLS.md)** · [Extension README](mist-toolbox/README.md)
+### ⬇ [Download mist-toolbox.zip](https://github.com/InterconnectedSystems/mist-toolbox/releases/latest/download/mist-toolbox.zip) (easiest install)
+
+Unzip it, then in Chrome or Edge: **Extensions → Developer mode → Load unpacked →** pick the
+unzipped `mist-toolbox` folder. Full steps: **[INSTALL.md](INSTALL.md)**.
+
+**[Install guide](INSTALL.md)** · **[Add your own tools](ADDING_TOOLS.md)** · [All releases](https://github.com/InterconnectedSystems/mist-toolbox/releases/latest) · [Extension README](mist-toolbox/README.md)
 
 ![The tool menu](mist-toolbox/docs/screenshots/02-home.png)
 
@@ -77,9 +82,10 @@ The full walkthrough with screenshots is in **[ADDING_TOOLS.md](ADDING_TOOLS.md)
 
 Chrome or Edge, on Windows, macOS or Linux:
 
-1. **Code → Download ZIP** on this page (or `git clone`), and unzip it somewhere permanent.
+1. **[Download `mist-toolbox.zip`](https://github.com/InterconnectedSystems/mist-toolbox/releases/latest/download/mist-toolbox.zip)**, the latest release. Unzip it somewhere
+   permanent (the browser runs the extension from that folder).
 2. Open `chrome://extensions` (or `edge://extensions`) and turn on **Developer mode**.
-3. **Load unpacked** → select the **`mist-toolbox`** folder (the one with `manifest.json`).
+3. **Load unpacked** → select the unzipped **`mist-toolbox`** folder.
 4. Pin the icon, click it, choose your region, paste a read-only API token, **Validate**.
 
 Details, updating and troubleshooting: **[INSTALL.md](INSTALL.md)**.

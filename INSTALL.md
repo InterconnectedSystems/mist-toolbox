@@ -6,22 +6,24 @@ macOS or Linux. Nothing else needs to be installed: no Python and no server. It 
 
 > **Safari is not supported.** Safari only runs extensions packaged as a signed Mac app.
 
-## 1. Get the files from GitHub
+## 1. Download the release ZIP (recommended)
 
-**Option A: download a ZIP (no git needed)**
+**[⬇ Download mist-toolbox.zip](https://github.com/InterconnectedSystems/mist-toolbox/releases/latest/download/mist-toolbox.zip)**, the latest release, also listed on the
+[Releases page](https://github.com/InterconnectedSystems/mist-toolbox/releases/latest).
 
-1. Open <https://github.com/InterconnectedSystems/mist-toolbox>.
-2. Click the green **Code** button → **Download ZIP**.
-3. Unzip it to a folder you will keep, for example `Documents/mist-toolbox-main`.
+It contains just the extension, ready to load. Unzip it somewhere you will keep, for example
+`Documents/mist-toolbox`. You get a folder called **`mist-toolbox`** with `manifest.json`
+inside. That folder is what you load in step 2.
 
-**Option B: clone with git**
+<details>
+<summary>Other ways to get it (for developers)</summary>
 
-```bash
-git clone https://github.com/InterconnectedSystems/mist-toolbox.git
-```
+- **Source ZIP:** the green **Code** button → **Download ZIP**. This includes the original
+  scripts, tests and screenshots; the extension is the `mist-toolbox` folder inside it.
+- **git:** `git clone https://github.com/InterconnectedSystems/mist-toolbox.git`, then load
+  the `mist-toolbox` folder inside the clone.
 
-The extension is the **`mist-toolbox`** folder *inside* the download, the one that contains
-`manifest.json`.
+</details>
 
 > Keep that folder where it is. The browser runs the extension from it, so if the folder is
 > moved or deleted, the extension stops working.
@@ -60,8 +62,10 @@ in a tab and accept the certificate once.
 
 ## Updating
 
-- **ZIP:** download the new ZIP, replace the files in your `mist-toolbox` folder, then press the
-  **reload** arrow on the extension's card in `chrome://extensions`.
+- **Release ZIP:** [download the latest `mist-toolbox.zip`](https://github.com/InterconnectedSystems/mist-toolbox/releases/latest/download/mist-toolbox.zip), replace the files in your
+  `mist-toolbox` folder with the new ones, then press the **reload** arrow on the extension's
+  card in `chrome://extensions`. Your token and settings are never stored, so nothing else
+  needs redoing.
 - **git:** `git pull`, then press **reload**.
 
 > Tools you added yourself live in `mist-toolbox/tools/`. Copy them somewhere safe before
@@ -73,7 +77,7 @@ in a tab and accept the certificate once.
 | What you see | What to do |
 |---|---|
 | **Load unpacked** is missing | Turn on **Developer mode** first. |
-| "Manifest file is missing or unreadable" | You picked the outer folder. Pick the `mist-toolbox` folder that contains `manifest.json`. |
+| "Manifest file is missing or unreadable" | You picked the wrong folder. Pick the unzipped `mist-toolbox` folder, the one that contains `manifest.json`. If unzipping made a folder inside a folder, go one level down. |
 | Chrome warns about developer-mode extensions at startup | Expected for unpacked extensions. Choose to keep it. |
 | Extensions are blocked by your organisation | A managed browser can forbid unpacked extensions; ask your IT team. |
 | macOS asks whether Chrome may access a folder | Allow it. This appears when **Manage tools** writes into a folder under Desktop, Documents or Downloads. |

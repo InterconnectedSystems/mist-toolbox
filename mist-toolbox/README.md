@@ -8,7 +8,8 @@ Everything runs in the browser. There is no Python to install, no server to run,
 no backend to secure, and no third-party JavaScript — not one dependency.
 Spreadsheets land in the browser's normal download list.
 
-> **New here?** [Install it](../INSTALL.md) · [Add your own tools with an AI assistant](../ADDING_TOOLS.md)
+> **New here?** [Download `mist-toolbox.zip`](https://github.com/InterconnectedSystems/mist-toolbox/releases/latest/download/mist-toolbox.zip) for the easiest install, then follow
+> [INSTALL.md](../INSTALL.md). · [Add your own tools with an AI assistant](../ADDING_TOOLS.md)
 
 ## Install
 
