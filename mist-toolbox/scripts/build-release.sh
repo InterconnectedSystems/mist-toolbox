@@ -12,7 +12,7 @@ work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
 git -C "$here/.." archive HEAD mist-toolbox | tar -x -C "$work"
-rm -rf "$work/mist-toolbox/tests" "$work/mist-toolbox/scripts" \
+rm -rf "$work/mist-toolbox/tests" "$work/mist-toolbox/scripts" "$work/mist-toolbox/community" \
        "$work/mist-toolbox/docs/screenshots" "$work/mist-toolbox/package.json"
 rm -f "$out"
 (cd "$work" && zip -qr -X "$out" mist-toolbox)

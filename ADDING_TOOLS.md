@@ -113,3 +113,9 @@ helper, the form field types, the `scope: "site"` option and the result format. 
 starting point is [`tool-template.js`](mist-toolbox/docs/tool-template.js). Without the
 **Manage tools** button: copy the file into `mist-toolbox/tools/`, run `npm run scan` (or add
 its filename to `tools/tools.json`), and reload the extension.
+
+## Share it
+
+If your tool could help other Mist admins, contribute it to the
+[community tools](mist-toolbox/community/README.md): add the file to `mist-toolbox/community/`
+and open a pull request. [CONTRIBUTING.md](CONTRIBUTING.md) has the steps and the checklist.

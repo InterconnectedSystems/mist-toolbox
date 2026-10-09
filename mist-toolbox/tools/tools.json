@@ -1,11 +1,14 @@
 [
+  "client-wifi-phy.js",
   "disconnect-console.js",
   "ip-blocks.js",
   "port-inventory.js",
   "site-alarms.js",
   "ssid-report.js",
   "ssr-pre-post.js",
+  "switch-additional-cli.js",
   "switch-configs.js",
+  "switch-psu-status.js",
   "switch-report.js",
   "wifi-clients.js"
 ]

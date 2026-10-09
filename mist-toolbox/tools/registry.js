@@ -51,13 +51,16 @@ export function validateTool(tool, file) {
  * or remove these; tests/registry.test.js keeps the list honest.
  */
 export const BUILTIN_TOOLS = [
+  "client-wifi-phy.js",
   "disconnect-console.js",
   "ip-blocks.js",
   "port-inventory.js",
   "ssid-report.js",
   "site-alarms.js",
   "ssr-pre-post.js",
+  "switch-additional-cli.js",
   "switch-configs.js",
+  "switch-psu-status.js",
   "switch-report.js",
   "wifi-clients.js",
 ];
