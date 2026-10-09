@@ -12,7 +12,7 @@ tool you can install with one click.
 Unzip it, then in Chrome or Edge: **Extensions → Developer mode → Load unpacked →** pick the
 unzipped `mist-toolbox` folder. Full steps: **[INSTALL.md](INSTALL.md)**.
 
-**[Install guide](INSTALL.md)** · **[Add your own tools](ADDING_TOOLS.md)** · [All releases](https://github.com/InterconnectedSystems/mist-toolbox/releases/latest) · [Extension README](mist-toolbox/README.md)
+**[Install guide](INSTALL.md)** · **[Add your own tools](ADDING_TOOLS.md)** · [Community tools](mist-toolbox/community/README.md) · [All releases](https://github.com/InterconnectedSystems/mist-toolbox/releases/latest) · [Extension README](mist-toolbox/README.md)
 
 ![The tool menu](mist-toolbox/docs/screenshots/02-home.png)
 
@@ -86,6 +86,14 @@ assistant the tool format, the helpers, the security rules and a full working ex
 
 The full walkthrough with screenshots is in **[ADDING_TOOLS.md](ADDING_TOOLS.md)**.
 
+## Community tools
+
+Written a tool others could use? Share it. Contributed tools live in
+[`mist-toolbox/community/`](mist-toolbox/community/README.md): browse the list, download one
+and install it with **Manage tools → Install**. Every contribution is checked in CI against the
+same rules the installer enforces. To add yours, see **[CONTRIBUTING.md](CONTRIBUTING.md)**. To
+ask for a tool, [open a tool request](https://github.com/InterconnectedSystems/mist-toolbox/issues/new?template=tool-request.md).
+
 ## Install
 
 Chrome or Edge, on Windows, macOS or Linux:
@@ -116,7 +124,7 @@ Every screenshot with a caption: [`mist-toolbox/docs/screenshots/`](mist-toolbox
 
 ## What's in this repository
 
-- [`mist-toolbox/`](mist-toolbox/) is the extension: tools, shared libraries, docs and 218 tests
+- [`mist-toolbox/`](mist-toolbox/) is the extension: tools, shared libraries, docs and 220 tests
   (`npm test`).
 - The original scripts (`mist_*.py`, `site-wifi-clients.py`, `pre-post-check-gui.py`,
   `mist_switch_report.js`, `site-alarms.js`, `client-wifi-phy.js`, `switch-psu-status.js`,
