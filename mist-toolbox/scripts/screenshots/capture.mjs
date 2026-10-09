@@ -17,7 +17,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { CONDUCTOR, ORG_ID, conductor, mist } from "./fixtures.mjs";
+import { CONDUCTOR, ORG_ID, PHY_MAC, conductor, mist } from "./fixtures.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const outDir = join(root, "docs", "screenshots");
@@ -293,11 +293,20 @@ try {
   await runTool("wifi-clients");
   await shot("07-wifi-clients", "Wi-Fi Clients Export");
 
+  await runTool("client-wifi-phy", { params: { mac: PHY_MAC } });
+  await shot("07b-client-wifi-phy", "Client Wi-Fi PHY Inspector — one client's radio link graded, site found automatically");
+
   await runTool("ip-blocks");
   await shot("08-ip-blocks", "IP Blocks / IRB Report — duplicate subnet flagged across sites");
 
   await runTool("port-inventory");
   await shot("09-port-inventory", "Switch Port Inventory");
+
+  await runTool("switch-psu-status");
+  await shot("09b-switch-psu-status", "Switch PSU Status — a failed supply and a switch without redundancy flagged");
+
+  await runTool("switch-additional-cli");
+  await shot("09c-switch-additional-cli", "Switch Additional CLI — template, rule, site and device commands side by side");
 
   // SSR Pre/Post: connect, pre-check, change, post-check.
   await click("#btnHome");

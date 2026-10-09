@@ -118,6 +118,8 @@ which drives the real extension in headless Chromium.
 | ![Switch Port Inventory](mist-toolbox/docs/screenshots/09-port-inventory.png)<br>**Switch Port Inventory** | ![Switch Config Export](mist-toolbox/docs/screenshots/05-switch-config-export.png)<br>**Switch Config Export** |
 | ![IP Blocks / IRB Report](mist-toolbox/docs/screenshots/08-ip-blocks.png)<br>**IP Blocks / IRB Report** | ![Site Alarms](mist-toolbox/docs/screenshots/06-site-alarms.png)<br>**Site Alarms** |
 | ![Wi-Fi Clients Export](mist-toolbox/docs/screenshots/07-wifi-clients.png)<br>**Wi-Fi Clients Export** | ![Disconnect Console](mist-toolbox/docs/screenshots/13-disconnect-console.png)<br>**Disconnect Console** |
+| ![Switch PSU Status](mist-toolbox/docs/screenshots/09b-switch-psu-status.png)<br>**Switch PSU Status** | ![Switch Additional CLI](mist-toolbox/docs/screenshots/09c-switch-additional-cli.png)<br>**Switch Additional CLI** |
+| ![Client Wi-Fi PHY Inspector](mist-toolbox/docs/screenshots/07b-client-wifi-phy.png)<br>**Client Wi-Fi PHY Inspector** | |
 | ![SSR post-check, changes highlighted](mist-toolbox/docs/screenshots/11-ssr-post-highlighted.png)<br>**SSR Pre/Post**: changed fields highlighted | ![SSR pre and post side by side](mist-toolbox/docs/screenshots/12-ssr-side-by-side.png)<br>**SSR Pre/Post**: side by side |
 
 Every screenshot with a caption: [`mist-toolbox/docs/screenshots/`](mist-toolbox/docs/screenshots/README.md).

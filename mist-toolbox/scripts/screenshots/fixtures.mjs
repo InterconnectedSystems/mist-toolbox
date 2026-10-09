@@ -8,9 +8,9 @@ export const ORG_ID = "demo-org";
 export const CONDUCTOR = "https://conductor.example.net";
 
 const SITES = [
-  { id: "site-hq", name: "HQ - Toronto", address: "100 Example Ave, Toronto ON", country_code: "CA", timezone: "America/Toronto" },
-  { id: "site-ott", name: "Branch - Ottawa", address: "20 Sample St, Ottawa ON", country_code: "CA", timezone: "America/Toronto" },
-  { id: "site-mtl", name: "Warehouse - Montreal", address: "5 Demo Rd, Montreal QC", country_code: "CA", timezone: "America/Toronto" },
+  { id: "site-hq", name: "HQ - Toronto", networktemplate_id: "swtpl-campus", address: "100 Example Ave, Toronto ON", country_code: "CA", timezone: "America/Toronto" },
+  { id: "site-ott", name: "Branch - Ottawa", networktemplate_id: "swtpl-campus", address: "20 Sample St, Ottawa ON", country_code: "CA", timezone: "America/Toronto" },
+  { id: "site-mtl", name: "Warehouse - Montreal", networktemplate_id: "swtpl-branch", address: "5 Demo Rd, Montreal QC", country_code: "CA", timezone: "America/Toronto" },
 ];
 
 const NOW = 1760000000; // fixed, so every regeneration matches
@@ -57,6 +57,17 @@ function configCmd(sw) {
   return lines;
 }
 
+// Power supplies per VC member (Switch PSU Status): hq-core's backup member has
+// lost a supply, hq-idf-1 has an empty slot, mtl-sw1 is a single-PSU model.
+const PSUS = {
+  "dev-core": [["ok", "ok"], ["ok", "Failed"]],
+  "dev-idf1": [["ok", "absent"]],
+  "dev-idf2": [["ok", "ok"]],
+  "dev-ott": [["ok", "ok"]],
+  "dev-mtl": [["ok"]],
+};
+const psus = (id, fpc) => (PSUS[id]?.[fpc] || []).map((status, i) => ({ name: `Power Supply ${i}`, status }));
+
 function switchStats(sw) {
   const ports = [];
   for (let p = 0; p < 8; p += 1) {
@@ -75,12 +86,12 @@ function switchStats(sw) {
     last_seen: NOW - (sw.status === "connected" ? 30 : 86400),
     ports,
   };
-  if (sw.vc) {
-    base.module_stat = [
-      { fpc_idx: 0, vc_role: "master", serial: sw.serial, version: sw.version, mac: sw.mac },
-      ...sw.vc.map((m, i) => ({ fpc_idx: i + 1, vc_role: "backup", serial: m.serial, version: sw.version, mac: m.mac })),
-    ];
-  }
+  base.module_stat = sw.vc
+    ? [
+      { fpc_idx: 0, vc_role: "master", serial: sw.serial, version: sw.version, mac: sw.mac, psus: psus(sw.id, 0) },
+      ...sw.vc.map((m, i) => ({ fpc_idx: i + 1, vc_role: "backup", serial: m.serial, version: sw.version, mac: m.mac, psus: psus(sw.id, i + 1) })),
+    ]
+    : [{ fpc_idx: 0, serial: sw.serial, version: sw.version, mac: sw.mac, psus: psus(sw.id, 0) }];
   return base;
 }
 
@@ -113,9 +124,15 @@ const PORT_USAGES = {
   uplink: { mode: "trunk", all_networks: true },
 };
 
+const DEVICE_CLI = {
+  "dev-core": ["set protocols mstp bridge-priority 4k", "set chassis aggregated-devices ethernet device-count 8"],
+  "dev-mtl": ["set poe interface ge-0/0/3 disable"],
+};
+
 function siteDevice(sw) {
   return {
     id: sw.id, mac: sw.mac, name: sw.name, model: sw.model, serial: sw.serial, site_id: sw.site, type: "switch",
+    ...(DEVICE_CLI[sw.id] ? { additional_config_cmds: DEVICE_CLI[sw.id] } : {}),
     port_config: { "ge-0/0/0": { usage: "uplink" }, "ge-0/0/1-3": { usage: "ap" }, "ge-0/0/4-7": { usage: "access" } },
     port_usages: PORT_USAGES,
   };
@@ -124,6 +141,22 @@ function siteDevice(sw) {
 // ---- Wireless ---------------------------------------------------------------
 
 const TEMPLATES = [{ id: "tpl-corp", name: "Corporate WLANs" }];
+
+const SWITCH_TEMPLATES = [
+  { id: "swtpl-campus", name: "Campus Switching",
+    additional_config_cmds: ["set system syslog host 192.0.2.10 any notice", "set system ntp server 192.0.2.123"],
+    switch_matching: { enable: true, rules: [
+      { name: "access-48p", match_model: "EX2300", additional_config_cmds: ["set poe management class", "set protocols lldp-med interface all"] },
+    ] } },
+  { id: "swtpl-branch", name: "Small Branch",
+    additional_config_cmds: ["set system ntp server 192.0.2.123"] },
+];
+const SITE_SETTING = {
+  "site-hq": { additional_config_cmds: ["set snmp location \"HQ - Toronto, 3rd floor MDF\""],
+    switch_matching: { enable: true, rules: [{ name: "core", match_role: "core", additional_config_cmds: ["set protocols ospf area 0.0.0.0 interface irb.10 passive"] }] } },
+  "site-ott": { additional_config_cmds: ["set snmp location \"Branch - Ottawa\"", "set system ntp server 192.0.2.123"] },
+  "site-mtl": {},
+};
 
 const WLANS = {
   "site-hq": [
@@ -158,6 +191,81 @@ function clients(siteId, count, subnet) {
   });
 }
 const CLIENTS = { "site-hq": clients("site-hq", 9, 10), "site-ott": clients("site-ott", 5, 20), "site-mtl": clients("site-mtl", 3, 30) };
+
+// One HQ client in detail, for the Client Wi-Fi PHY Inspector. Its readings are
+// chosen to show the dashboard's grades: usable signal but poor SNR on a busy,
+// noisy, overlapped 80 MHz channel, with some ping-pong roaming. Times are
+// relative to the run, not NOW, because the tool charts the past 24 hours.
+export const PHY_MAC = mac(0x900a07);
+const PHY_SITE = "site-hq";
+const liveNow = () => Math.floor(Date.now() / 600000) * 600;
+
+const AP_NAMES = ["hq-ap-01", "hq-ap-02", "hq-ap-03", "hq-ap-04", "hq-ap-05", "hq-ap-06"];
+// [5 GHz primary, width, clients, util] per AP; hq-ap-03 serves the client.
+const AP_5G = [[36, 80, 9, 31], [149, 80, 12, 28], [52, 80, 22, 62], [56, 20, 7, 40], [52, 40, 11, 47], [100, 80, 6, 18]];
+function apStats() {
+  return AP_NAMES.map((name, i) => {
+    const [ch, bw, clients, util] = AP_5G[i];
+    const serving = i === 2;
+    return {
+      id: `ap-${i}`, name, mac: mac(0x600 + i), type: "ap", model: "AP45", status: "connected", site_id: PHY_SITE,
+      radio_stat: {
+        band_24: { channel: [1, 6, 11][i % 3], bandwidth: 20, num_clients: 3, noise_floor: -91, util_all: 35, power: 8 },
+        band_5: { mac: mac(0x6a0 + i), channel: ch, bandwidth: bw, num_clients: clients, power: serving ? 14 : 17,
+          noise_floor: serving ? -88 : -94, util_all: util,
+          ...(serving ? { util_tx: 12, util_rx_in_bss: 30, util_rx_other_bss: 14, util_unknown_wifi: 2, util_non_wifi: 14 } : {}) },
+      },
+    };
+  });
+}
+
+function phyClient() {
+  const base = CLIENTS[PHY_SITE].find((c) => c.mac === PHY_MAC);
+  return { ...base, ap_mac: mac(0x602), band: "5", channel: 52, channel_width: 80, proto: "ax", num_streams: 2,
+    rssi: -68, snr: 18, tx_rate: 480, rx_rate: 360, tx_retries: 1400, tx_pkts: 7800, rx_retries: 300, rx_pkts: 9100,
+    dual_band: true, last_seen: liveNow() - 20 };
+}
+
+// A smooth, repeatable wobble for the time series.
+const wave = (i, a, b) => Math.sin(i / 9) * a + Math.sin(i / 2.7) * b;
+function phySeries(metric) {
+  const t1 = liveNow();
+  const rt = Array.from({ length: 144 }, (_, i) => t1 - (143 - i) * 600);
+  const at = (f) => rt.map((_, i) => Math.round(f(i) * 10) / 10);
+  const series = {
+    rssi: at((i) => -63 + wave(i, 4, 2) - (i > 95 && i < 110 ? 9 : 0)),
+    snr: at((i) => 24 + wave(i, 4, 2) - (i > 95 && i < 110 ? 8 : 0)),
+    tx_rate: at((i) => Math.max(86, 620 + wave(i, 160, 70))),
+    rx_rate: at((i) => Math.max(65, 470 + wave(i, 120, 50))),
+    tx_retries: at((i) => Math.max(0, 140 + wave(i, 80, 40))),
+    rx_retries: at((i) => Math.max(0, 30 + wave(i, 15, 8))),
+  }[metric];
+  return series ? { rt, results: series } : null;
+}
+
+function phySessions() {
+  const t1 = liveNow();
+  const ap = (i) => mac(0x600 + i);
+  // [AP index, start hours ago, end hours ago or null]
+  return [[2, 23, 17.5], [4, 17.5, 17.45], [2, 17.45, 9.2], [4, 9.2, 9.17], [2, 9.17, 9.1], [3, 9.1, 6.0], [2, 6.0, null]]
+    .map(([i, a, b]) => ({ ap: ap(i), band: "5", ssid: "DemoCorp", connect: t1 - a * 3600, disconnect: b == null ? null : t1 - b * 3600,
+      duration: Math.round(((b == null ? 0 : -b) + a) * 3600) }));
+}
+
+function phyEvents() {
+  const t1 = liveNow();
+  const ev = (h, type, text, o = {}) => ({ timestamp: t1 - h * 3600, type, text, ap: mac(0x602), band: "5", channel: 52, ...o });
+  return [
+    ev(22.9, "CLIENT_ASSOCIATION", "Associated"),
+    ev(17.5, "CLIENT_DEAUTHENTICATION", "Deauthenticated", { reason: 4, ap: mac(0x602) }),
+    ev(17.45, "CLIENT_REASSOCIATION", "Reassociated", { ap: mac(0x604) }),
+    ev(9.2, "CLIENT_DISASSOCIATION", "Disassociated", { reason: 8, ap: mac(0x602) }),
+    ev(9.17, "CLIENT_REASSOCIATION", "Reassociated", { ap: mac(0x604) }),
+    ev(8.3, "CLIENT_DEAUTHENTICATION", "Deauthenticated", { reason: 4, ap: mac(0x602) }),
+    ev(6.0, "CLIENT_REASSOCIATION", "Reassociated", { ap: mac(0x602) }),
+    ev(2.1, "CLIENT_DHCP_SUCCESS", "DHCP Success"),
+  ];
+}
 
 // ---- Alarms -----------------------------------------------------------------
 
@@ -208,7 +316,27 @@ export function mist(path, query) {
   }
   if ((r = m(/^\/sites\/([^/]+)\/wlans\/derived$/))) return { body: WLANS[r[1]] || [] };
   if ((r = m(/^\/sites\/([^/]+)\/stats\/clients$/))) return { body: CLIENTS[r[1]] || [] };
-  if ((r = m(/^\/sites\/([^/]+)\/stats\/devices$/))) return { body: SWITCHES.filter((s) => s.site === r[1]).map(switchStats) };
+  if ((r = m(/^\/sites\/([^/]+)\/stats\/devices$/))) {
+    if (query.get("type") === "ap") return { body: r[1] === PHY_SITE ? apStats() : [] };
+    return { body: SWITCHES.filter((s) => s.site === r[1]).map(switchStats) };
+  }
+  if (path === `/orgs/${ORG_ID}/networktemplates`) return { body: SWITCH_TEMPLATES };
+  if ((r = m(/^\/sites\/([^/]+)\/setting$/))) return { body: SITE_SETTING[r[1]] || {} };
+  if (path === `/orgs/${ORG_ID}/clients/search`) {
+    const hit = query.get("mac") === PHY_MAC;
+    return { body: { results: hit ? [{ mac: PHY_MAC, site_id: PHY_SITE, last_seen: liveNow() - 20 }] : [], total: hit ? 1 : 0 } };
+  }
+  if (path === `/sites/${PHY_SITE}/stats/clients/${PHY_MAC}`) return { body: phyClient() };
+  if (path === `/sites/${PHY_SITE}/clients/search`) return { body: { results: [phyClient()], total: 1 } };
+  if (path === `/sites/${PHY_SITE}/clients/${PHY_MAC}/events`) return { body: { results: phyEvents() } };
+  if (path === `/sites/${PHY_SITE}/clients/sessions/search`) {
+    const rows = phySessions();
+    return { body: { results: rows, total: rows.length } };
+  }
+  if ((r = m(new RegExp(`^/sites/${PHY_SITE}/insights/client/${PHY_MAC}/([^/]+)$`)))) {
+    const body = phySeries(decodeURIComponent(r[1]));
+    return body ? { body } : null;
+  }
   if ((r = m(/^\/sites\/([^/]+)\/stats\/ports\/search$/))) {
     const rows = SWITCHES.filter((s) => s.site === r[1]).flatMap((sw) => switchStats(sw).ports.map((p) => ({ ...p, mac: sw.mac })));
     return { body: { results: rows, total: rows.length } };
