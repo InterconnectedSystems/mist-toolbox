@@ -56,13 +56,16 @@ test("every built-in tool card says what level it works at", async () => {
     chips[tool.id] = scopeChip(tool);
   }
   assert.deepEqual(chips, {
+    "client-wifi-phy": "Site · Client",
     "disconnect-console": "Site · Client",
     "ip-blocks": "Site · Org",
     "port-inventory": "Site · Org",
     "ssid-report": "Site · Org",
     "site-alarms": "Site · Org",            // its own checkbox + dropdown count
     "ssr-pre-post": "SSR Conductor",
+    "switch-additional-cli": "Site · Org",
     "switch-configs": "Site · Org",
+    "switch-psu-status": "Site · Org",
     "switch-report": "Site · Org",
     "wifi-clients": "Site · Org",
   });

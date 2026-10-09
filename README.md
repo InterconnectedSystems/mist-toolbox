@@ -27,6 +27,10 @@ unzipped `mist-toolbox` folder. Full steps: **[INSTALL.md](INSTALL.md)**.
 - **Root-cause why one client keeps disconnecting**: RF and SNR, 802.11 reason codes, DHCP
   after roam, RRM channel changes, DFS radar on the AP it was on, and Teams/Zoom call quality,
   correlated into a verdict. *(Disconnect Console)*
+- **Inspect one client's radio link**: RSSI, SNR and noise floor graded against design
+  thresholds, PHY rate against what the link could do, retries, channel load and non-Wi-Fi
+  interference, overlapping AP radios, Wi-Fi generation and roaming, as a colour-coded
+  dashboard. *(Client Wi-Fi PHY Inspector)*
 
 ### Switching
 - **Audit switch software**: every switch's model, serial, firmware, status, IP, uptime and
@@ -39,6 +43,10 @@ unzipped `mist-toolbox` folder. Full steps: **[INSTALL.md](INSTALL.md)**.
 - **Map your IP space**: every IRB/VLAN interface address with subnet, mask, broadcast and
   usable range, with duplicate and overlapping networks flagged across sites.
   *(IP Blocks / IRB Report)*
+- **Check power supply redundancy**: every switch's PSUs, per Virtual Chassis member, with
+  failed supplies and switches running on a single supply flagged. *(Switch PSU Status)*
+- **Compare additional CLI**: every "additional CLI commands" block at template, switch-rule,
+  site and device level, side by side, with a de-duplicated list of commands. *(Switch Additional CLI)*
 
 ### Operations
 - **See what's alarming**: every alarm over the past day or week, by site and by type, with
@@ -108,7 +116,8 @@ Every screenshot with a caption: [`mist-toolbox/docs/screenshots/`](mist-toolbox
 
 ## What's in this repository
 
-- [`mist-toolbox/`](mist-toolbox/) is the extension: tools, shared libraries, docs and 198 tests
+- [`mist-toolbox/`](mist-toolbox/) is the extension: tools, shared libraries, docs and 218 tests
   (`npm test`).
 - The original scripts (`mist_*.py`, `site-wifi-clients.py`, `pre-post-check-gui.py`,
-  `mist_switch_report.js`, `site-alarms.js`) are kept for reference and for comparing output.
+  `mist_switch_report.js`, `site-alarms.js`, `client-wifi-phy.js`, `switch-psu-status.js`,
+  `switch-additional-cli.js`) are kept for reference and for comparing output.
