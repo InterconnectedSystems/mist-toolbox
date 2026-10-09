@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Mist Toolbox",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Read-only Juniper Mist and SSR reporting tools: disconnect RCA, SSID report, switch port inventory, IP/IRB blocks, Wi-Fi client export, and SSR pre/post change checks.",
   "minimum_chrome_version": "116",
   "background": { "service_worker": "background.js", "type": "module" },
