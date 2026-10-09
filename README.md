@@ -48,6 +48,13 @@ unzipped `mist-toolbox` folder. Full steps: **[INSTALL.md](INSTALL.md)**.
 - **Compare additional CLI**: every "additional CLI commands" block at template, switch-rule,
   site and device level, side by side, with a de-duplicated list of commands. *(Switch Additional CLI)*
 
+### Routing
+- **See every BGP session and WAN peer path at once**: switch BGP (EVPN overlay and underlay),
+  WAN-edge BGP on SSR and SRX, and every SSR peer path and SRX IPsec path with latency, jitter,
+  loss and MOS, for one site or the whole org in a single org-wide pass. Down, degraded and
+  recently re-established sessions are listed first, on a colour board you can open full
+  screen. *(BGP Sessions)*
+
 ### Operations
 - **See what's alarming**: every alarm over the past day or week, by site and by type, with
   severity, affected devices and acknowledgement status. *(Site Alarms)*
@@ -119,14 +126,14 @@ which drives the real extension in headless Chromium.
 | ![IP Blocks / IRB Report](mist-toolbox/docs/screenshots/08-ip-blocks.png)<br>**IP Blocks / IRB Report** | ![Site Alarms](mist-toolbox/docs/screenshots/06-site-alarms.png)<br>**Site Alarms** |
 | ![Wi-Fi Clients Export](mist-toolbox/docs/screenshots/07-wifi-clients.png)<br>**Wi-Fi Clients Export** | ![Disconnect Console](mist-toolbox/docs/screenshots/13-disconnect-console.png)<br>**Disconnect Console** |
 | ![Switch PSU Status](mist-toolbox/docs/screenshots/09b-switch-psu-status.png)<br>**Switch PSU Status** | ![Switch Additional CLI](mist-toolbox/docs/screenshots/09c-switch-additional-cli.png)<br>**Switch Additional CLI** |
-| ![Client Wi-Fi PHY Inspector](mist-toolbox/docs/screenshots/07b-client-wifi-phy.png)<br>**Client Wi-Fi PHY Inspector** | |
+| ![Client Wi-Fi PHY Inspector](mist-toolbox/docs/screenshots/07b-client-wifi-phy.png)<br>**Client Wi-Fi PHY Inspector** | ![BGP Sessions](mist-toolbox/docs/screenshots/09d-bgp-sessions.png)<br>**BGP Sessions** |
 | ![SSR post-check, changes highlighted](mist-toolbox/docs/screenshots/11-ssr-post-highlighted.png)<br>**SSR Pre/Post**: changed fields highlighted | ![SSR pre and post side by side](mist-toolbox/docs/screenshots/12-ssr-side-by-side.png)<br>**SSR Pre/Post**: side by side |
 
 Every screenshot with a caption: [`mist-toolbox/docs/screenshots/`](mist-toolbox/docs/screenshots/README.md).
 
 ## What's in this repository
 
-- [`mist-toolbox/`](mist-toolbox/) is the extension: tools, shared libraries, docs and 220 tests
+- [`mist-toolbox/`](mist-toolbox/) is the extension: tools, shared libraries, docs and 225 tests
   (`npm test`).
 - The original scripts (`mist_*.py`, `site-wifi-clients.py`, `pre-post-check-gui.py`,
   `mist_switch_report.js`, `site-alarms.js`, `client-wifi-phy.js`, `switch-psu-status.js`,

@@ -267,6 +267,46 @@ function phyEvents() {
   ];
 }
 
+// ---- BGP (BGP Sessions) --------------------------------------------------------
+// hq-core runs EVPN to a spine (one session idle), every site has a WAN edge,
+// and the Montreal SRX's IPsec path to HQ is down.
+
+const GATEWAYS = [
+  { site: "site-hq", name: "hq-ssr", model: "SSR130", mac: mac(0x701) },
+  { site: "site-ott", name: "ott-ssr", model: "SSR120", mac: mac(0x702) },
+  { site: "site-mtl", name: "mtl-srx", model: "SRX320", mac: mac(0x703) },
+];
+const gatewayStats = (gw) => ({ type: "gateway", status: "connected", site_id: gw.site, name: gw.name, model: gw.model, mac: gw.mac });
+
+const bgpRow = (dev, site, o) => ({ mac: dev, site_id: site, vrf_name: "default", local_as: 65010, timestamp: NOW - 60, up: true,
+  state: "established", rx_routes: 42, tx_routes: 18, rx_pkts: 182340, tx_pkts: 181977, flap_count: 0, uptime: 1814400, ...o });
+const BGP_PEERS = [
+  bgpRow(mac(0x101), "site-hq", { neighbor: "10.255.1.1", neighbor_as: 65001, evpn_overlay: true, router_id: "10.255.0.2" }),
+  bgpRow(mac(0x101), "site-hq", { neighbor: "10.255.1.3", neighbor_as: 65001, evpn_overlay: true, router_id: "10.255.0.2",
+    state: "idle", up: false, rx_routes: 0, tx_routes: 0, flap_count: 7, uptime: 0 }),
+  bgpRow(mac(0x101), "site-hq", { neighbor: "10.10.0.1", neighbor_as: 65100, router_id: "10.255.0.2", rx_routes: 3, tx_routes: 4 }),
+  bgpRow(mac(0x201), "site-ott", { neighbor: "10.20.0.1", neighbor_as: 65100, local_as: 65020, rx_routes: 3, tx_routes: 2, uptime: 21600 }),
+  bgpRow(mac(0x701), "site-hq", { neighbor: "203.0.113.1", neighbor_as: 64496, local_as: 65100, vrf_name: "internet", rx_routes: 1, tx_routes: 6, node: "node0" }),
+  bgpRow(mac(0x701), "site-hq", { neighbor: "10.10.0.2", neighbor_as: 65010, local_as: 65100, vrf_name: "corp", rx_routes: 4, tx_routes: 3, node: "node0" }),
+  bgpRow(mac(0x702), "site-ott", { neighbor: "198.51.100.1", neighbor_as: 64497, local_as: 65100, vrf_name: "internet", rx_routes: 1, tx_routes: 4 }),
+  bgpRow(mac(0x703), "site-mtl", { neighbor: "192.0.2.65", neighbor_as: 64498, local_as: 65100, vrf_name: "internet",
+    state: "active", up: false, rx_routes: 0, tx_routes: 0, flap_count: 3, uptime: 0 }),
+];
+
+const path = (gw, peer, o) => ({ mac: gw.mac, site_id: gw.site, router_name: gw.name, peer_mac: peer.mac, peer_site_id: peer.site,
+  peer_router_name: peer.name, type: "svr", up: true, is_active: true, latency: 14, jitter: 1.2, loss: 0, mos: 4.4, mtu: 1500,
+  uptime: 1209600, last_seen: NOW - 30, ...o });
+const [GW_HQ, GW_OTT, GW_MTL] = GATEWAYS;
+const VPN_PEERS = [
+  path(GW_HQ, GW_OTT, { port_id: "ge-0/0/0", peer_port_id: "ge-0/0/0" }),
+  path(GW_HQ, GW_OTT, { port_id: "ge-0/0/1", peer_port_id: "ge-0/0/1", is_active: false, latency: 31, jitter: 6.8, loss: 1.6, mos: 3.7 }),
+  path(GW_OTT, GW_HQ, { port_id: "ge-0/0/0", peer_port_id: "ge-0/0/0", latency: 15 }),
+  path(GW_MTL, GW_HQ, { type: "ipsec", port_id: "ge-0/0/0", peer_port_id: "ge-0/0/0", up: false, is_active: false,
+    latency: "", jitter: "", loss: "", mos: "", uptime: 0, last_seen: NOW - 5400 }),
+  path(GW_HQ, GW_MTL, { type: "ipsec", port_id: "ge-0/0/0", peer_port_id: "ge-0/0/0", up: false, is_active: false,
+    latency: "", jitter: "", loss: "", mos: "", uptime: 0, last_seen: NOW - 5400 }),
+];
+
 // ---- Alarms -----------------------------------------------------------------
 
 const ALARM_DEFS = [
@@ -309,7 +349,11 @@ export function mist(path, query) {
       members: (sw.vc || []).map((m, i) => ({ mac: m.mac, serial: m.serial, member_id: i + 1 })) }));
     return { body: { results: rows, total: rows.length } };
   }
-  if (path === `/orgs/${ORG_ID}/stats/devices`) return { body: SWITCHES.map(switchStats) };
+  if (path === `/orgs/${ORG_ID}/stats/devices`) {
+    return { body: query.get("type") === "gateway" ? GATEWAYS.map(gatewayStats) : SWITCHES.map(switchStats) };
+  }
+  if (path === `/orgs/${ORG_ID}/stats/bgp_peers/search`) return { body: { results: BGP_PEERS, total: BGP_PEERS.length } };
+  if (path === `/orgs/${ORG_ID}/stats/vpn_peers/search`) return { body: { results: VPN_PEERS, total: VPN_PEERS.length } };
   if (path === `/orgs/${ORG_ID}/stats/ports/search`) {
     const rows = SWITCHES.flatMap((sw) => switchStats(sw).ports.map((p) => ({ ...p, mac: sw.mac, site_id: sw.site })));
     return { body: { results: rows, total: rows.length } };

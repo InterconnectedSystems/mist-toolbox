@@ -1,4 +1,5 @@
 [
+  "bgp-sessions.js",
   "client-wifi-phy.js",
   "disconnect-console.js",
   "ip-blocks.js",

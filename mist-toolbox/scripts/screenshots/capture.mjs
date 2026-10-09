@@ -308,6 +308,9 @@ try {
   await runTool("switch-additional-cli");
   await shot("09c-switch-additional-cli", "Switch Additional CLI — template, rule, site and device commands side by side");
 
+  await runTool("bgp-sessions");
+  await shot("09d-bgp-sessions", "BGP Sessions — switch EVPN, WAN-edge BGP and SSR/SRX peer paths, problems first");
+
   // SSR Pre/Post: connect, pre-check, change, post-check.
   await click("#btnHome");
   await click('[data-tool="ssr-pre-post"]');

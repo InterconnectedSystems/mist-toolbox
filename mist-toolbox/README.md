@@ -67,6 +67,7 @@ press **End session**, or whenever the tab closes or reloads.
 | **Client Wi-Fi PHY Inspector** | `client-wifi-phy.js` (added as written) | Site · Client | Mist token + org |
 | **Switch PSU Status** | `switch-psu-status.js` (added as written) | Site · Org | Mist token + org |
 | **Switch Additional CLI** | `switch-additional-cli.js` (added as written) | Site · Org | Mist token + org |
+| **BGP Sessions** | `bgp-sessions.js` (added as written) | Site · Org | Mist token + org |
 | **Wi-Fi Clients Export** | `site-wifi-clients.py` | Site · Org | Mist token + org |
 | **IP Blocks / IRB Report** | `mist_ip_blocks.py` | Site · Org | Mist token + org |
 | **Switch Port Inventory** | `mist_switch_port_inventory.py` | Site · Org | Mist token + org |

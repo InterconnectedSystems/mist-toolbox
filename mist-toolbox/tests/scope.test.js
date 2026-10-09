@@ -56,6 +56,7 @@ test("every built-in tool card says what level it works at", async () => {
     chips[tool.id] = scopeChip(tool);
   }
   assert.deepEqual(chips, {
+    "bgp-sessions": "Site · Org",
     "client-wifi-phy": "Site · Client",
     "disconnect-console": "Site · Client",
     "ip-blocks": "Site · Org",

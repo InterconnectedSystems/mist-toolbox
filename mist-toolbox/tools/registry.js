@@ -51,6 +51,7 @@ export function validateTool(tool, file) {
  * or remove these; tests/registry.test.js keeps the list honest.
  */
 export const BUILTIN_TOOLS = [
+  "bgp-sessions.js",
   "client-wifi-phy.js",
   "disconnect-console.js",
   "ip-blocks.js",
