@@ -129,6 +129,24 @@ which drives the real extension in headless Chromium.
 | ![Client Wi-Fi PHY Inspector](mist-toolbox/docs/screenshots/07b-client-wifi-phy.png)<br>**Client Wi-Fi PHY Inspector** | ![BGP Sessions](mist-toolbox/docs/screenshots/09d-bgp-sessions.png)<br>**BGP Sessions** |
 | ![SSR post-check, changes highlighted](mist-toolbox/docs/screenshots/11-ssr-post-highlighted.png)<br>**SSR Pre/Post**: changed fields highlighted | ![SSR pre and post side by side](mist-toolbox/docs/screenshots/12-ssr-side-by-side.png)<br>**SSR Pre/Post**: side by side |
 
+**Switch PSU Status** dashboard filters: every switch including disconnected ones, a typed site
+name, and a clicked site bar.
+
+| | |
+|---|---|
+| ![PSU Status, all switches](mist-toolbox/docs/screenshots/09b2-psu-all-switches.png)<br>**All switches**, disconnected ones dashed | ![PSU Status, site search](mist-toolbox/docs/screenshots/09b3-psu-search-site.png)<br>**Search** for a site |
+
+### Workbooks
+
+Every report tool also saves a styled `.xlsx`: a filled header, frozen top row, filters, coloured
+tabs and problem rows highlighted. These are rendered from the actual downloaded files.
+
+| | |
+|---|---|
+| ![PSU workbook, Switches](mist-toolbox/docs/screenshots/30-xlsx-psu-switches.png)<br>**Switch PSU Status**: Switches | ![PSU workbook, PSUs](mist-toolbox/docs/screenshots/31-xlsx-psu-psus.png)<br>**Switch PSU Status**: PSUs |
+| ![BGP workbook, Problems](mist-toolbox/docs/screenshots/32-xlsx-bgp-problems.png)<br>**BGP Sessions**: Problems | ![Alarms workbook](mist-toolbox/docs/screenshots/34-xlsx-alarms.png)<br>**Site Alarms**: Alarms |
+| ![Port Inventory workbook](mist-toolbox/docs/screenshots/36-xlsx-port-inventory.png)<br>**Switch Port Inventory**: Switch Ports | ![Additional CLI workbook](mist-toolbox/docs/screenshots/38-xlsx-additional-cli.png)<br>**Switch Additional CLI**: CLI Lines |
+
 Every screenshot with a caption: [`mist-toolbox/docs/screenshots/`](mist-toolbox/docs/screenshots/README.md).
 
 ## What's in this repository
