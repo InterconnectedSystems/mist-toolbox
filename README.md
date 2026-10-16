@@ -44,7 +44,8 @@ unzipped `mist-toolbox` folder. Full steps: **[INSTALL.md](INSTALL.md)**.
   usable range, with duplicate and overlapping networks flagged across sites.
   *(IP Blocks / IRB Report)*
 - **Check power supply redundancy**: every switch's PSUs, per Virtual Chassis member, with
-  failed supplies and switches running on a single supply flagged. *(Switch PSU Status)*
+  failed supplies, switches running on a single supply, and VC members that stop reporting
+  flagged. *(Switch PSU Status)*
 - **Compare additional CLI**: every "additional CLI commands" block at template, switch-rule,
   site and device level, side by side, with a de-duplicated list of commands. *(Switch Additional CLI)*
 

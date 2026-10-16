@@ -1,5 +1,6 @@
 // Switch PSU Status, added as written: PSU classing, per-member health with the
-// worst member deciding a VC, scope, and failing sites.
+// worst member deciding a VC, scope, and failing sites. VC members the org
+// inventory knows about but that do not report are flagged as missing.
 
 import { strict as assert } from "node:assert";
 import test from "node:test";
@@ -13,6 +14,10 @@ const sw = (o) => ({ type: "switch", status: "connected", model: "EX4400-48P", .
 
 const routes = (o = {}) => ({
   "/orgs/org-1/sites": SITES,
+  "/orgs/org-1/inventory": [
+    { type: "switch", mac: "aabbcc000003", vc_mac: "aabbcc000003", serial: "A" },
+    { type: "switch", mac: "aabbcc000013", vc_mac: "aabbcc000003", serial: "B" },
+  ],
   "/sites/s1/stats/devices": [
     sw({ name: "core", mac: "aabbcc000001", module_stat: [{ fpc_idx: 0, psus: psus("ok", "ok") }] }),
     sw({ name: "edge", mac: "aabbcc000002", module_stat: [{ fpc_idx: 0, psus: psus("OK", "absent") }] }),
@@ -47,7 +52,8 @@ test("all sites: each switch graded, worst VC member wins, failures sort first",
   assert.equal(rows.find((r) => r.name === "edge").absent, 1);
   assert.equal(rows.find((r) => r.name === "br").unknown, 1);
   assert.ok(!rows.some((r) => r.name === "not-a-switch"));
-  assert.match(result.summary, /^5 switch\(es\): 1 with a failed PSU, 2 not redundant, 1 redundant$/);
+  assert.match(result.summary,
+    /^5 switch\(es\): 1 with a failed PSU, 0 with a missing member, 2 not redundant, 1 redundant$/);
   assert.match(result.filename, /^mist_switch_psu_all_sites_Acme_Corp_/);
 });
 
@@ -68,7 +74,7 @@ test("By Site puts the site with a failure first", async () => {
   const rows = sheetNamed(await run({}), "By Site").rows;
   assert.deepEqual(rows.map((r) => r.site), ["HQ", "Branch"]);
   assert.deepEqual({ ...rows[0], __style: undefined },
-    { site: "HQ", total: 4, failed: 1, single: 1, nodata: 1, redundant: 1, offline: 1, __style: undefined });
+    { site: "HQ", total: 4, failed: 1, missing: 0, single: 1, nodata: 1, redundant: 1, offline: 1, __style: undefined });
 });
 
 test("disconnected switches can be left out", async () => {
@@ -96,4 +102,63 @@ test("a failing site is listed, not fatal", async () => {
 test("no site picked is a clear error", async () => {
   stubMist(routes());
   await assert.rejects(run({ allSites: false }), /Pick a site/);
+});
+
+// A 4-member VC: inventory knows 4 members, module_stat reports only 3, all
+// healthy. Before, the 3 that report decided it and it read as Redundant.
+const STACK = "aabbcc0000a0";
+const stackInv = ["S0", "S1", "S2", "S3"].map((serial, i) => ({
+  type: "switch", serial, mac: `aabbcc0000a${i}`, vc_mac: STACK, model: "EX4400-48P",
+}));
+const stack = (mods) => sw({ name: "stack", mac: STACK, module_stat: mods });
+const mod = (i, o = {}) => ({ fpc_idx: i, serial: `S${i}`, mac: `aabbcc0000a${i}`, psus: psus("ok", "ok"), ...o });
+const stackRoutes = (mods, inv = stackInv) => routes({
+  "/orgs/org-1/inventory": inv,
+  "/sites/s1/stats/devices": [stack(mods)],
+  "/sites/s2/stats/devices": [],
+});
+
+test("4-member VC with a member not reporting is Member missing, not Redundant", async () => {
+  stubMist(stackRoutes([mod(0), mod(1), mod(3)]));
+  const result = await run({});
+  const row = sheetNamed(result, "Switches").rows.find((r) => r.name === "stack");
+  assert.equal(row.health, "Member missing");
+  assert.equal(row.members, "3/4");
+  assert.equal(row.__style, "red");
+  assert.match(row.detail, /FPC \?: S2 not reporting/);
+  const psuRow = sheetNamed(result, "PSUs").rows.find((r) => r.serial === "S2");
+  assert.equal(psuRow.cls, "Member missing");
+  assert.deepEqual(sheetNamed(result, "By Site").rows[0],
+    { site: "HQ", total: 1, failed: 0, missing: 1, single: 0, nodata: 0, redundant: 0, offline: 0, __style: "red" });
+  assert.match(result.summary, /0 with a failed PSU, 1 with a missing member/);
+});
+
+test("a member reporting as not present does not count on its stale PSU readings", async () => {
+  stubMist(stackRoutes([mod(0), mod(1), mod(2, { vc_state: "not-present" }), mod(3)]));
+  const result = await run({});
+  const row = sheetNamed(result, "Switches").rows.find((r) => r.name === "stack");
+  assert.equal(row.health, "Member missing");
+  assert.match(row.detail, /FPC 2: S2 not reporting \(last: Power Supply 0=ok, Power Supply 1=ok\)/);
+});
+
+test("all 4 members reporting is Redundant", async () => {
+  stubMist(stackRoutes([mod(0), mod(1), mod(2, { vc_state: "present" }), mod(3)]));
+  const row = sheetNamed(await run({}), "Switches").rows.find((r) => r.name === "stack");
+  assert.equal(row.health, "Redundant");
+  assert.equal(row.members, 4);
+});
+
+test("members are matched by MAC when the inventory has no serial", async () => {
+  const inv = stackInv.map(({ serial, ...r }) => r);
+  stubMist(stackRoutes([mod(0), mod(1), mod(2), mod(3)], inv));
+  const row = sheetNamed(await run({}), "Switches").rows.find((r) => r.name === "stack");
+  assert.equal(row.health, "Redundant");
+});
+
+test("an inventory failure only turns off the missing-member check", async () => {
+  stubMist(routes({ "/orgs/org-1/inventory": () => { throw new Error("nope"); } }));
+  const ctx = testCtx({ params: { allSites: true, includeOffline: true } });
+  const result = await tool.run(ctx);
+  assert.equal(sheetNamed(result, "Switches").rows.length, 5);
+  assert.ok(ctx.logs.some(([, m]) => /missing VC members cannot be detected/.test(m)));
 });
