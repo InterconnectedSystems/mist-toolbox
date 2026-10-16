@@ -4,21 +4,26 @@
 // Each virtual-chassis member (module_stat entry) is judged on its own, and the
 // switch takes the worst member's result. The org inventory says which members a
 // VC should have, so a member that stops reporting is flagged, not just dropped.
+// Modules without PSUs (CX management modules, line cards, fan trays) are
+// skipped, and PSU modules with no FPC or VC role are pooled as one chassis.
 
 // Raw Junos/Mist PSU status -> class. Edit these lists if your switches report
 // other words. Anything not listed is "unknown" (raw text is always kept).
-const PSU_OK = ["ok", "online", "normal", "good", "present", "powered", "on"];
+// Junos "Present" means installed but not supplying power (no cord, no input).
+const PSU_OK = ["ok", "online", "normal", "good", "powered", "on"];
+const PSU_NOPOWER = ["present", "no input", "unpowered"];
 const PSU_ABSENT = ["absent", "not present", "not-present", "empty", "missing", "not installed"];
 const PSU_FAILED = ["failed", "fail", "failure", "check", "error", "offline", "off", "down", "faulty", "alarm", "no power"];
 
 const PSU = {
   ok: { label: "OK", color: "#2e7d32" },
   failed: { label: "Failed", color: "#d32f2f" },
+  nopower: { label: "No power", color: "#e65100" },
   absent: { label: "Empty slot", color: "#9e9e9e" },
   unknown: { label: "Unknown", color: "#5c6bc0" },
 };
 const HEALTH = {
-  failed: { label: "PSU failed", color: "#d32f2f", rank: 0, style: "red" },
+  failed: { label: "PSU failed / no power", color: "#d32f2f", rank: 0, style: "red" },
   missing: { label: "Member missing", color: "#8e24aa", rank: 1, style: "red" },
   single: { label: "Not redundant", color: "#f57c00", rank: 2, style: "yellow" },
   nodata: { label: "No PSU data", color: "#757575", rank: 3, style: undefined },
@@ -36,6 +41,7 @@ function classify(raw) {
   const s = String(raw ?? "").trim().toLowerCase();
   if (!s) return "unknown";
   if (PSU_ABSENT.includes(s)) return "absent";
+  if (PSU_NOPOWER.includes(s)) return "nopower";
   if (PSU_FAILED.includes(s) || s.includes("fail")) return "failed";
   if (PSU_OK.includes(s)) return "ok";
   return "unknown";
@@ -43,13 +49,16 @@ function classify(raw) {
 
 function memberHealth(psus) {
   const n = (c) => psus.filter((p) => p.cls === c).length;
-  if (n("failed")) return "failed";
+  if (n("failed") || n("nopower")) return "failed";
   if (n("ok") >= 2) return "redundant";
   if (n("ok") === 1) return "single";
   return "nodata";
 }
 
 const normMac = (v) => String(v || "").toLowerCase().replace(/[^0-9a-f]/g, "");
+
+/** "FPC 2", or "Chassis" for pooled CX PSU modules. */
+const memberLabel = (m) => (m.idx === "chassis" ? "Chassis" : `FPC ${m.idx}`);
 
 const worst = (keys) =>
   keys.reduce((w, k) => (HEALTH[k].rank < HEALTH[w].rank ? k : w), "redundant");
@@ -131,9 +140,16 @@ export default {
     try {
       const inventory = await ctx.getAll(`/orgs/${ctx.orgId}/inventory`, { type: "switch", vc: true });
       for (const item of inventory) {
-        const key = normMac(item.vc_mac || item.mac);
+        const key = normMac(item.vc_mac);
         if (!key) continue;
         expected.set(key, [...(expected.get(key) || []), item]);
+      }
+      // Mist lists a VC's virtual chassis as a row whose serial is the VC MAC;
+      // it is not a physical member. Only a group of 2+ real members is a VC.
+      for (const [key, rows] of expected) {
+        const real = rows.filter((r) => normMac(r.serial) !== key && normMac(r.serial) !== normMac(r.mac));
+        if (real.length > 1) expected.set(key, real);
+        else expected.delete(key);
       }
     } catch (e) {
       ctx.log(`Inventory: ${e.message}; missing VC members cannot be detected`, "err");
@@ -143,29 +159,45 @@ export default {
     const switches = perSite.flat()
       .map((d) => {
         const online = String(d.status || "").toLowerCase() === "connected";
-        const members = list(d.module_stat)
-          .filter((m) => m && (m.psus || m.fpc_idx != null || m.serial))
-          .map((m, i) => {
-            const psus = list(m.psus).map((p, j) => ({
-              name: p?.name || `PSU ${j}`,
-              raw: p?.status ?? "",
-              cls: classify(p?.status),
-            }));
-            const absent = NOT_PRESENT.test(String(m.vc_state || ""));
-            return {
-              idx: m.fpc_idx ?? m.idx ?? i,
-              role: m.vc_role || "",
-              model: m.model || d.model || "",
-              serial: m.serial || "",
-              mac: normMac(m.mac),
-              psus,
-              // A not-present member keeps its last PSU readings; they are shown
-              // but cannot vouch for it.
-              missing: absent,
-              health: absent ? "missing" : memberHealth(psus),
-            };
+        const toPsus = (arr, offset = 0) => arr.map((p, j) => ({
+          name: p?.name || `PSU ${j + offset}`,
+          raw: p?.status ?? "",
+          cls: classify(p?.status),
+        })).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+        const members = [];
+        const pooled = [];
+        list(d.module_stat).forEach((m, i) => {
+          if (!m || typeof m !== "object") return;
+          const raw = list(m.psus);
+          const absent = NOT_PRESENT.test(String(m.vc_state || ""));
+          const isMember = m.fpc_idx != null || m.vc_role;
+          // CX PSU modules: PSUs with no FPC or VC role belong to the chassis.
+          if (!isMember) { pooled.push(...raw); return; }
+          // A module with no PSUs (management module, line card) says nothing
+          // about power, unless it is a VC member that is not present.
+          if (!raw.length && !absent) return;
+          const psus = toPsus(raw);
+          members.push({
+            idx: m.fpc_idx ?? m.idx ?? i,
+            role: m.vc_role || "",
+            model: m.model || d.model || "",
+            serial: m.serial || "",
+            mac: normMac(m.mac),
+            psus,
+            // A not-present member keeps its last PSU readings; they are shown
+            // but cannot vouch for it.
+            missing: absent,
+            health: absent ? "missing" : memberHealth(psus),
           });
-        const inv = expected.get(normMac(d.vc_mac || d.mac)) || [];
+        });
+        if (pooled.length) {
+          const psus = toPsus(pooled);
+          members.push({ idx: "chassis", role: "", model: d.model || "", serial: "", mac: "", psus,
+            missing: false, health: memberHealth(psus) });
+        }
+        const reporting = members.length;
+        // No member data at all (e.g. disconnected) is "No PSU data", not missing.
+        const inv = reporting ? expected.get(normMac(d.vc_mac || d.mac)) || [] : [];
         for (const e of inv) {
           const serial = String(e.serial || "").toUpperCase();
           const mac = normMac(e.mac);
@@ -178,7 +210,8 @@ export default {
             });
           }
         }
-        members.sort((a, b) => (a.idx === "?") - (b.idx === "?") || Number(a.idx) - Number(b.idx));
+        const order = (m) => (m.idx === "?" ? 1e6 : m.idx === "chassis" ? -1 : Number(m.idx));
+        members.sort((a, b) => order(a) - order(b));
         return {
           site: d.__site,
           name: d.name || ctx.fmtMac(String(d.mac || "")) || d.id,
@@ -209,7 +242,8 @@ export default {
             site: sw.site, switch: sw.name, model: m.model, member: m.idx, role: m.role,
             serial: m.serial, psu: p.name, raw: p.raw, cls: PSU[p.cls].label,
             online: sw.online ? "Connected" : "Disconnected",
-            __style: p.cls === "failed" || m.missing ? "red" : p.cls === "unknown" ? "yellow" : undefined,
+            __style: p.cls === "failed" || p.cls === "nopower" || m.missing ? "red"
+              : p.cls === "unknown" ? "yellow" : undefined,
           });
         }
       }
@@ -233,9 +267,9 @@ export default {
       b.failed - a.failed || b.missing - a.missing || b.single - a.single || a.site.localeCompare(b.site));
 
     ctx.log(`${switches.length} switch(es), ${allPsus.length} PSU(s): ` +
-      `${psuTotals.failed} failed, ${totals.missing} VC(s) missing a member, ` +
+      `${psuTotals.failed} failed, ${psuTotals.nopower} without power, ${totals.missing} VC(s) missing a member, ` +
       `${totals.single} switch(es) not redundant`,
-      psuTotals.failed || totals.missing ? "err" : "ok");
+      psuTotals.failed || psuTotals.nopower || totals.missing ? "err" : "ok");
 
     // ---- Dashboard --------------------------------------------------------
     if (ctx.mount) drawDashboard(ctx, { switches, siteRows, totals, psuTotals, offline, scopeLabel });
@@ -250,6 +284,7 @@ export default {
       { header: "VC Members", key: "members", width: 10 },
       { header: "PSUs OK", key: "ok", width: 9 },
       { header: "PSUs Failed", key: "failed", width: 10 },
+      { header: "PSUs No Power", key: "nopower", width: 10 },
       { header: "Empty Slots", key: "absent", width: 10 },
       { header: "PSUs Unknown", key: "unknown", width: 10 },
       { header: "PSU Health", key: "health", width: 16 },
@@ -267,11 +302,12 @@ export default {
             : s.members.length,
           ok: count(ps, (p) => p.cls === "ok"),
           failed: count(ps, (p) => p.cls === "failed"),
+          nopower: count(ps, (p) => p.cls === "nopower"),
           absent: count(ps, (p) => p.cls === "absent"),
           unknown: count(ps, (p) => p.cls === "unknown"),
           health: HEALTH[s.health].label,
           detail: s.members.map((m) =>
-            `${s.members.length > 1 ? `FPC ${m.idx}: ` : ""}` +
+            `${s.members.length > 1 ? `${memberLabel(m)}: ` : ""}` +
             (m.missing ? `${m.serial || "member"} not reporting${m.psus.length ? " (last: " : ""}` : "") +
             (m.psus.length ? m.psus.map((p) => `${p.name}=${p.raw || "?"}`).join(", ") : m.missing ? "" : "no PSU data") +
             (m.missing && m.psus.length ? ")" : "")).join("\n"),
@@ -307,12 +343,13 @@ export default {
       ["Sites that failed", failedSites.length],
       ["Switches", switches.length],
       ["Disconnected switches", includeOffline ? `${offline} (last known status shown)` : "excluded"],
-      ["PSUs OK / failed / empty / unknown",
-        `${psuTotals.ok} / ${psuTotals.failed} / ${psuTotals.absent} / ${psuTotals.unknown}`],
+      ["PSUs OK / failed / no power / empty / unknown",
+        `${psuTotals.ok} / ${psuTotals.failed} / ${psuTotals.nopower} / ${psuTotals.absent} / ${psuTotals.unknown}`],
       ["Redundant", "Every member has 2 or more PSUs reporting OK"],
       ["Member missing", "A VC member in the org inventory is not reporting, or reports as not present"],
       ["Not redundant", "A member has exactly 1 PSU reporting OK (includes single-PSU models)"],
-      ["PSU failed", "A member has a PSU reporting failed, check, offline or similar"],
+      ["PSU failed / no power", "A member has a PSU reporting failed, check, offline or similar, "
+        + "or one that is installed but not supplying power (Junos \"Present\")"],
       ["Generated", ctx.epochToUtc(Date.now())],
     ];
     const sheets = [
@@ -332,7 +369,7 @@ export default {
     const scopeName = allSites ? "all_sites" : ctx.safeName(siteName(targets[0]));
     const failNote = failedSites.length ? `, ${failedSites.length} site(s) failed` : "";
     return {
-      summary: `${switches.length} switch(es): ${totals.failed} with a failed PSU, ` +
+      summary: `${switches.length} switch(es): ${totals.failed} with a failed or unpowered PSU, ` +
         `${totals.missing} with a missing member, ` +
         `${totals.single} not redundant, ${totals.redundant} redundant${failNote}`,
       filename: ctx.stampedName(`mist_switch_psu_${scopeName}`, ctx.orgName, "xlsx"),
@@ -359,14 +396,14 @@ function drawDashboard(ctx, { switches, siteRows, totals, psuTotals, offline, sc
   const pill = (p) => {
     const num = (String(p.name).match(/(\d+)\s*$/) || [])[1];
     return `<span class="psu-pill" style="background:${PSU[p.cls].color}" ` +
-      `title="${E(`${p.name}: ${p.raw || "no status"}`)}">${E(num != null ? `PSU ${num}` : p.name)}</span>`;
+      `title="${E(`${p.name}: ${p.raw || "no status"}${p.cls === "nopower" ? " (installed, not supplying power)" : ""}`)}">${E(num != null ? `PSU ${num}` : p.name)}</span>`;
   };
 
   const card = (s) => {
     const members = s.members.length
       ? s.members.map((m) =>
           `<div class="psu-mem">${s.members.length > 1
-            ? `<em>FPC ${E(m.idx)}${m.role ? ` \u00b7 ${E(m.role)}` : ""}</em>` : ""}` +
+            ? `<em>${E(memberLabel(m))}${m.role ? ` \u00b7 ${E(m.role)}` : ""}</em>` : ""}` +
           (m.missing
             ? `<span class="psu-miss">${E(m.serial || "member")} \u00b7 not reporting</span>`
             : m.psus.length ? m.psus.map(pill).join("") : `<span class="psu-none">no PSU data</span>`) +
@@ -431,7 +468,8 @@ function drawDashboard(ctx, { switches, siteRows, totals, psuTotals, offline, sc
     ${tile(totals.single, HEALTH.single.label, HEALTH.single.color)}
     ${tile(totals.redundant, HEALTH.redundant.label, HEALTH.redundant.color)}
     ${tile(totals.nodata, HEALTH.nodata.label, HEALTH.nodata.color)}
-    ${tile(`${psuTotals.failed}/${psuTotals.ok + psuTotals.failed + psuTotals.unknown}`, "PSUs failed / installed", PSU.failed.color)}
+    ${tile(`${psuTotals.failed + psuTotals.nopower}/${psuTotals.ok + psuTotals.failed + psuTotals.nopower + psuTotals.unknown}`,
+      "PSUs failed or unpowered / installed", PSU.failed.color)}
     ${tile(offline, "Disconnected", "#9e9e9e")}
   </div>
   <div class="psu-legend">${legend}</div>
@@ -468,7 +506,7 @@ function drawDashboard(ctx, { switches, siteRows, totals, psuTotals, offline, sc
       ? [...groups].map(([site, list]) =>
           `<div class="psu-group">${E(site)} <span class="psu-cnt">(${list.length})</span></div>` +
           `<div class="psu-grid">${list.map(card).join("")}</div>`).join("")
-      : `<div class="psu-empty">No switches match.${state.issuesOnly ? " No switch has a failed PSU, a missing member or lost redundancy." : ""}</div>`;
+      : `<div class="psu-empty">No switches match.${state.issuesOnly ? " No switch has a failed or unpowered PSU, a missing member or lost redundancy." : ""}</div>`;
 
     root.querySelectorAll("[data-mode]").forEach((b) =>
       b.classList.toggle("on", (b.dataset.mode === "issues") === state.issuesOnly));
